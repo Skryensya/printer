@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─── App-specific tokens ─────────────────────────────────────────────────── */
+@theme {
+  --font-mono: "Berkeley Mono", "Fira Code", "JetBrains Mono", ui-monospace, monospace;
+
+  /* Thermal paper palette — kept for the printer buffer component */
+  --color-paper:  #f5f0e8;
+  --color-roll:   #e8e0d0;
+  --color-ink:    #1a1a1a;
+}
+
+/* ─── Shadcn semantic tokens → thermal paper palette ─────────────────────── */
+@theme inline {
+  /* shadcn radius scale */
+  --radius-sm:  calc(var(--radius) * 0.6);
+  --radius-md:  calc(var(--radius) * 0.8);
+  --radius-lg:  var(--radius);
+  --radius-xl:  calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  /* shadcn color scale → CSS vars below */
+  --color-background:         var(--background);
+  --color-foreground:         var(--foreground);
+  --color-card:               var(--card);
+  --color-card-foreground:    var(--card-foreground);
+  --color-popover:            var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary:            var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary:          var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:              var(--muted);
+  --color-muted-foreground:   var(--muted-foreground);
+  --color-accent:             var(--accent);
+  --color-accent-foreground:  var(--accent-foreground);
+  --color-destructive:        var(--destructive);
+  --color-border:             var(--border);
+  --color-input:              var(--input);
+  --color-ring:               var(--ring);
+}
+
+/* ─── Thermal paper light theme ──────────────────────────────────────────── */
+:root {
+  --radius: 0.5rem;
+
+  /* warm off-white paper */
+  --background:          oklch(0.948 0.013 85);
+  --foreground:          oklch(0.10  0     0);
+
+  /* slightly lighter card */
+  --card:                oklch(0.97  0.008 85);
+  --card-foreground:     oklch(0.10  0     0);
+  --popover:             oklch(0.98  0.006 85);
+  --popover-foreground:  oklch(0.10  0     0);
+
+  /* forest green primary */
+  --primary:             oklch(0.35  0.11  145);
+  --primary-foreground:  oklch(0.98  0     0);
+
+  /* warm roll secondary */
+  --secondary:           oklch(0.90  0.011 75);
+  --secondary-foreground: oklch(0.10 0     0);
+
+  /* muted roll */
+  --muted:               oklch(0.90  0.011 75);
+  --muted-foreground:    oklch(0.55  0.017 75);
+
+  /* accent = same roll for hover states */
+  --accent:              oklch(0.87  0.013 75);
+  --accent-foreground:   oklch(0.10  0     0);
+
+  /* dark red destructive */
+  --destructive:         oklch(0.32  0.13  18);
+
+  /* warm stone border */
+  --border:              oklch(0.79  0.014 75);
+  --input:               oklch(0.79  0.014 75);
+  --ring:                oklch(0.35  0.11  145);
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    font-family: var(--font-mono);
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

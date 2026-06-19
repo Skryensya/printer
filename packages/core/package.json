@@ -1,0 +1,27 @@
+{
+  "name": "@printer/core",
+  "version": "0.0.1",
+  "module": "src/index.ts",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./render": "./src/render.ts"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.1",
+    "usb": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/qrcode": "^1.5.6",
+    "@types/w3c-web-usb": "^1.0.14",
+    "typescript": "^5"
+  }
+}

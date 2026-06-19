@@ -1,0 +1,19 @@
+{
+  "name": "@printer/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "bin": {
+    "printer": "src/index.ts"
+  },
+  "dependencies": {
+    "@printer/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}
