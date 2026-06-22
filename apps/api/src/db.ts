@@ -94,7 +94,7 @@ export async function listKeyStats(): Promise<KeyStats[]> {
 // ─── Job helpers ─────────────────────────────────────────────────────────────
 
 export type JobStatus = "pending" | "printing" | "done" | "failed" | "cancelled";
-export type JobType   = "text" | "ticket" | "qr" | "barcode" | "image" | "borders" | "test";
+export type JobType   = "text" | "ticket" | "todo" | "qr" | "barcode" | "image" | "borders" | "test";
 
 export interface Job {
   id:          string;

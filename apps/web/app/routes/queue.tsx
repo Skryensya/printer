@@ -3,13 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   Ban, RefreshCw, Trash2, Printer as PrinterIcon,
   Type, QrCode, Barcode, ImageIcon, Ticket, LayoutGrid,
-  X, CheckSquare, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Check,
+  X, CheckSquare, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Check, ListTodo,
 } from "lucide-react";
 import {
   listJobs, getJob, retryJob, reprintJob, cancelJob, deleteJob, watchWsUrl,
   type PrintJob, type JobStatus,
 } from "~/api";
-import { renderTicket, renderBorders, renderCardSVG } from "@printer/core/render";
+import { renderTicket, renderBorders, renderCardSVG, buildTodoCard } from "@printer/core/render";
 import type { JobPayloadMap, WatcherEvent } from "@printer/core";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -52,6 +52,12 @@ function jobToEntries(job: PrintJob): PrintEntryInput[] {
     case "ticket": {
       const p = job.payload as JobPayloadMap["ticket"];
       const svg = renderCardSVG(p);
+      const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      return [{ type: "image", src, effect: "photo" as const }];
+    }
+    case "todo": {
+      const p = job.payload as JobPayloadMap["todo"];
+      const svg = renderCardSVG(buildTodoCard(p));
       const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
       return [{ type: "image", src, effect: "photo" as const }];
     }
@@ -101,6 +107,7 @@ function StatusBadge({ status }: { status: JobStatus }) {
 const TYPE_ICON: Record<string, React.ElementType> = {
   text:    Type,
   ticket:  Ticket,
+  todo:    ListTodo,
   qr:      QrCode,
   barcode: Barcode,
   image:   ImageIcon,

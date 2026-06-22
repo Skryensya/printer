@@ -12,6 +12,22 @@ export interface CardData {
   qr?:     string;           // QR code data — if set, body shows QR instead of title+meta
 }
 
+// A to-do/list item: a name, or a [name, qty] tuple (qty right-aligned).
+export type TodoItem = string | [string, string];
+
+// Render a to-do payload into a card. Lives here (not execute-job) so the web
+// preview can import it via @printer/core/render without pulling in sharp/usb.
+export function buildTodoCard(p: { items: TodoItem[]; title?: string; badge?: string }): CardData {
+  const now = new Date();
+  const dd  = String(now.getDate()).padStart(2, "0");
+  const mm  = String(now.getMonth() + 1).padStart(2, "0");
+  const yy  = String(now.getFullYear()).slice(2);
+  const rows: [string, string, string][] = p.items.map(i =>
+    Array.isArray(i) ? ["[ ]", i[0], i[1] || ""] : ["[ ]", i, ""],
+  );
+  return { label: p.title || undefined, badge: p.badge || undefined, date: `${dd}/${mm}/${yy}`, rows };
+}
+
 // ── Layout constants ──────────────────────────────────────────────────────────
 
 const TOTAL_W   = 384;

@@ -1,6 +1,6 @@
 import { enqueue } from "./queue";
 import {
-  buildTextPayload, buildTicketPayload, buildQrPayload, buildImagePayload,
+  buildTextPayload, buildTicketPayload, buildTodoPayload, buildQrPayload, buildImagePayload,
 } from "@printer/core";
 import type { Job } from "./db";
 import type { PrintTextBody, PrintTicketBody, PrintQrBody, PrintImageBody, PrintTodoBody } from "./types";
@@ -54,32 +54,11 @@ export async function intakeImage(body: unknown, source: string): Promise<Intake
 export async function intakeTodo(body: unknown, source: string): Promise<IntakeResult> {
   const b = body as PrintTodoBody | null;
   if (!Array.isArray(b?.items) || b.items.length === 0) return reject("body.items must be a non-empty array");
-  // All rows use the 3-col inline layout: [ ] | name | qty.
-  // qty="" means no qty displayed but keeps consistent inline layout across all items.
-  // name clamped to 50 chars (wraps gracefully); qty clamped to 8 chars (fits right column).
-  const rows: [string, string, string][] = b.items
-    .map(i => {
-      if (Array.isArray(i)) {
-        const name = String(i[0] ?? "").trim().slice(0, 50);
-        const qty  = String(i[1] ?? "").trim().slice(0, 8);
-        return name ? (["[ ]", name, qty] as [string, string, string]) : null;
-      }
-      const name = String(i).trim().slice(0, 50);
-      return name ? (["[ ]", name, ""] as [string, string, string]) : null;
-    })
-    .filter(Boolean) as [string, string, string][];
-  if (rows.length === 0) return reject("body.items must contain at least one non-empty string");
-  const now = new Date();
-  const dd  = String(now.getDate()).padStart(2, "0");
-  const mm  = String(now.getMonth() + 1).padStart(2, "0");
-  const yy  = String(now.getFullYear()).slice(2);
-  const card: CardData = {
-    label: b.title?.trim() || undefined,
-    badge: b.badge?.trim() || undefined,
-    date:  `${dd}/${mm}/${yy}`,
-    rows,
-  };
-  return { ok: true, job: await enqueue("ticket", buildTicketPayload(card), source) };
+  // buildTodoPayload normalizes + clamps (name ≤50, qty ≤8) and drops empties.
+  const payload = buildTodoPayload({ items: b.items, title: b.title, badge: b.badge });
+  if (payload.items.length === 0) return reject("body.items must contain at least one non-empty item");
+  // Stored as its own "todo" job type — renders as a card, replicable as POST /print/todo.
+  return { ok: true, job: await enqueue("todo", payload, source) };
 }
 
 export async function intakeMessage(

@@ -2,12 +2,12 @@ import { cmd, line } from "./commands";
 import { buildTicket, buildBorders } from "./tickets";
 import { buildBarcode, type BarcodeFormat } from "./barcode";
 import { buildImage, buildQRImage, buildBarcodeImage, buildCardTicket, type ImageEffect } from "./image";
-import type { CardData } from "./card-ticket";
+import { buildTodoCard, type CardData, type TodoItem } from "./card-ticket";
 
 // ─── Canonical job type list ──────────────────────────────────────────────────
 // Single source of truth. Import JOB_TYPES / JobType everywhere — don't redeclare.
 
-export const JOB_TYPES = ["text","ticket","qr","barcode","image","borders","test"] as const;
+export const JOB_TYPES = ["text","ticket","todo","qr","barcode","image","borders","test"] as const;
 export type JobType = typeof JOB_TYPES[number];
 
 // ─── Payload shapes ───────────────────────────────────────────────────────────
@@ -15,6 +15,9 @@ export type JobType = typeof JOB_TYPES[number];
 export interface JobPayloadMap {
   text:    { v: number; text: string; align?: string; bold?: boolean; size?: number; invert?: boolean };
   ticket:  { v: number } & CardData;
+  // A to-do is its own job type but renders as a card. The payload keeps the
+  // original request shape so it stays replicable as POST /print/todo.
+  todo:    { v: number; items: TodoItem[]; title?: string; badge?: string };
   qr:      { v: number; text: string; size?: number; errorLevel?: "L" | "M" | "Q" | "H" };
   barcode: { v: number; data: string; height?: number; format?: BarcodeFormat };
   image:   { v: number; image: string; mediaType?: string; effect?: ImageEffect };
@@ -50,6 +53,23 @@ export function buildTicketPayload(b: CardData): JobPayloadMap["ticket"] {
     rows:  b.rows,
     qr:    b.qr,
   };
+}
+
+// Normalize + clamp to-do items into the stored payload shape.
+// name ≤ 50 chars (wraps), qty ≤ 8 chars (fits the right column). Empties dropped.
+export function buildTodoPayload(b: { items: TodoItem[]; title?: string; badge?: string }): JobPayloadMap["todo"] {
+  const items: TodoItem[] = b.items
+    .map((i): TodoItem | null => {
+      if (Array.isArray(i)) {
+        const name = String(i[0] ?? "").trim().slice(0, 50);
+        const qty  = String(i[1] ?? "").trim().slice(0, 8);
+        return name ? [name, qty] : null;
+      }
+      const name = String(i).trim().slice(0, 50);
+      return name ? name : null;
+    })
+    .filter((i): i is TodoItem => i !== null);
+  return { v: 1, items, title: b.title?.trim() || undefined, badge: b.badge?.trim() || undefined };
 }
 
 export function buildQrPayload(b: {
@@ -108,6 +128,11 @@ export async function buildJobCommands(type: JobType, payload: unknown): Promise
     case "ticket": {
       const b = payload as JobPayloadMap["ticket"];
       const bands = await buildCardTicket(b);
+      return [cmd.alignCenter(), ...bands];
+    }
+    case "todo": {
+      const b = payload as JobPayloadMap["todo"];
+      const bands = await buildCardTicket(buildTodoCard(b));
       return [cmd.alignCenter(), ...bands];
     }
     case "qr": {

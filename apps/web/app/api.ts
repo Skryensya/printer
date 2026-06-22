@@ -145,7 +145,7 @@ export type PermissionType = typeof ALL_PERMISSION_TYPES[number];
 
 // Actual job queue types — includes barcode for historical entries that may
 // already exist in the queue, even though the barcode endpoint is removed.
-export const ALL_JOB_TYPES = ["text","ticket","qr","barcode","image","borders","test"] as const;
+export const ALL_JOB_TYPES = ["text","ticket","todo","qr","barcode","image","borders","test"] as const;
 export type JobType = typeof ALL_JOB_TYPES[number];
 
 export interface ApiKey {
