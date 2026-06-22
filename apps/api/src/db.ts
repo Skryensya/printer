@@ -55,12 +55,63 @@ export async function migrate(): Promise<void> {
       updated_at INTEGER NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::int
     )
   `;
+
+  // Wall accounts — created only by the admin (no public signup). A logged-in
+  // wall user has no message cooldown and a fixed display name.
+  await sql`
+    CREATE TABLE IF NOT EXISTS wall_users (
+      username     TEXT NOT NULL PRIMARY KEY,
+      password_hash TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      created_at   INTEGER NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::int
+    )
+  `;
 }
 
 // Tests only: ensure schema exists, then wipe all rows for an isolated run.
 export async function resetDbForTest(): Promise<void> {
   await migrate();
-  await sql`TRUNCATE jobs, api_keys, rate_limit_daily, key_stats`;
+  await sql`TRUNCATE jobs, api_keys, rate_limit_daily, key_stats, wall_users`;
+}
+
+// ─── Wall accounts ──────────────────────────────────────────────────────────────
+
+export interface WallUser {
+  username:     string;
+  display_name: string;
+  created_at:   number;
+}
+
+export async function createWallUser(username: string, password: string, displayName: string): Promise<WallUser | null> {
+  const hash = await Bun.password.hash(password);
+  try {
+    const [u] = await sql<WallUser[]>`
+      INSERT INTO wall_users (username, password_hash, display_name)
+      VALUES (${username}, ${hash}, ${displayName})
+      RETURNING username, display_name, created_at
+    `;
+    return u ?? null;
+  } catch {
+    return null; // username already exists
+  }
+}
+
+export async function verifyWallUser(username: string, password: string): Promise<WallUser | null> {
+  const [row] = await sql<{ username: string; password_hash: string; display_name: string; created_at: number }[]>`
+    SELECT username, password_hash, display_name, created_at FROM wall_users WHERE username = ${username}
+  `;
+  if (!row) return null;
+  if (!(await Bun.password.verify(password, row.password_hash))) return null;
+  return { username: row.username, display_name: row.display_name, created_at: row.created_at };
+}
+
+export async function listWallUsers(): Promise<WallUser[]> {
+  return sql<WallUser[]>`SELECT username, display_name, created_at FROM wall_users ORDER BY created_at DESC`;
+}
+
+export async function deleteWallUser(username: string): Promise<boolean> {
+  const rows = await sql`DELETE FROM wall_users WHERE username = ${username} RETURNING username`;
+  return rows.length > 0;
 }
 
 // ─── Key usage stats ───────────────────────────────────────────────────────────

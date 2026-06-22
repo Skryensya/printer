@@ -15,6 +15,7 @@ export interface WallItem {
 export interface WallSnapshot {
   items:             WallItem[];   // ONLY the current visitor's own messages
   cooldownRemaining: number;       // ms left before this viewer can post again
+  user:              string | null; // logged-in account name; null = anonymous
 }
 
 export interface SubmitInput {
@@ -44,9 +45,11 @@ function clientIp(): string {
 export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): Promise<WallSnapshot> => {
   const { listQueueForIp, cooldownRemaining } = await import("./server/store");
   const { ensureDrain } = await import("./server/drain");
+  const { currentUser } = await import("./session");
   ensureDrain();
 
-  const ip = clientIp();
+  const ip   = clientIp();
+  const user = await currentUser();
 
   return {
     items: listQueueForIp(ip).map(e => ({
@@ -55,7 +58,9 @@ export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): P
       from:      e.from,
       createdAt: e.createdAt,
     })),
-    cooldownRemaining: cooldownRemaining(ip),
+    // Logged-in accounts have no cooldown.
+    cooldownRemaining: user ? 0 : cooldownRemaining(ip),
+    user:              user?.name ?? null,
   };
 });
 
@@ -68,39 +73,45 @@ export const submitMessageFn = createServerFn({ method: "POST" })
     const { cooldownRemaining, recordSubmission, enqueue } = await import("./server/store");
     const { verifyRecaptcha } = await import("./server/recaptcha");
     const { ensureDrain } = await import("./server/drain");
+    const { currentUser } = await import("./session");
 
-    const ip = clientIp();
+    const ip   = clientIp();
+    const user = await currentUser();
 
-    // 1. Honeypot + timing trap. Silently accept-but-drop so bots get no signal,
-    //    and burn the IP's cooldown so it can't immediately retry.
-    const looksLikeBot = data.website.trim() !== "" || data.elapsedMs < config.minFillMs;
-    if (looksLikeBot) {
-      recordSubmission(ip);
-      return { ok: true, id: "dropped", cooldownRemaining: config.cooldownMs };
+    // 1. Honeypot + timing trap. Skip for logged-in accounts (trusted).
+    if (!user) {
+      const looksLikeBot = data.website.trim() !== "" || data.elapsedMs < config.minFillMs;
+      if (looksLikeBot) {
+        recordSubmission(ip);
+        return { ok: true, id: "dropped", cooldownRemaining: config.cooldownMs };
+      }
     }
 
     // 2. Validate the message.
     const message = data.message.trim();
-    if (!message) return { ok: false, error: "Message can't be empty" };
+    if (!message) return { ok: false, error: "El mensaje no puede estar vacío" };
     if (message.length > config.maxMessageLen) {
-      return { ok: false, error: `Message must be ${config.maxMessageLen} characters or fewer` };
+      return { ok: false, error: `Máximo ${config.maxMessageLen} caracteres` };
     }
-    const from = (data.from.trim() || "anon").slice(0, 24);
+    // Logged-in: name is fixed to the account (can't be changed). Anon: free name.
+    const from = user ? user.name : (data.from.trim() || "anon").slice(0, 24);
 
-    // 3. Per-IP cooldown — no second message from the same IP for 30 minutes.
-    const remaining = cooldownRemaining(ip);
-    if (remaining > 0) {
-      return { ok: false, error: "You've already sent a message recently", cooldownRemaining: remaining };
+    // Logged-in accounts skip the cooldown and the captcha entirely.
+    if (!user) {
+      // 3. Per-IP cooldown.
+      const remaining = cooldownRemaining(ip);
+      if (remaining > 0) {
+        return { ok: false, error: "Ya enviaste un mensaje hace poco", cooldownRemaining: remaining };
+      }
+      // 4. reCAPTCHA.
+      const captcha = await verifyRecaptcha(data.recaptchaToken, ip);
+      if (!captcha.ok) return { ok: false, error: captcha.reason ?? "Captcha falló" };
+      recordSubmission(ip);
     }
 
-    // 4. reCAPTCHA.
-    const captcha = await verifyRecaptcha(data.recaptchaToken, ip);
-    if (!captcha.ok) return { ok: false, error: captcha.reason ?? "Captcha failed" };
-
-    // 5. Accept: start the cooldown, enqueue, and make sure the drainer is running.
-    recordSubmission(ip);
+    // 5. Enqueue and make sure the drainer is running.
     const entry = enqueue(message, from, ip);
     ensureDrain();
 
-    return { ok: true, id: entry.id, cooldownRemaining: config.cooldownMs };
+    return { ok: true, id: entry.id, cooldownRemaining: user ? 0 : config.cooldownMs };
   });

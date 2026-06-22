@@ -9,6 +9,9 @@ import {
 import {
   getJobHandler, listJobsHandler, retryJobHandler, cancelJobHandler, deleteJobHandler, reprintJobHandler,
 } from "./handlers/jobs";
+import {
+  listWallUsersHandler, createWallUserHandler, deleteWallUserHandler, wallLoginHandler,
+} from "./handlers/wall";
 import { withServiceAuth, withAdminAuth, withMessageAuth, withJobAuth } from "./middleware/auth";
 import { withCors } from "./middleware/cors";
 import { broadcastToWatchers, pushJobToAgent, startPingInterval, websocketHandlers, getAgentStatus } from "./websocket";
@@ -137,6 +140,27 @@ async function router(req: Request): Promise<Response> {
   if (revokeMatch && method === "POST") {
     const id = revokeMatch[1]!;
     return withCors(withAdminAuth((req) => revokeKeyHandler(req, id)))(req);
+  }
+
+  // ── Wall accounts ────────────────────────────────────────────────────────────
+  // Login verification: called server-side by the wall with any valid API key.
+  // Auth'd (so it can't be brute-forced via the public API) but not quota-counted.
+  if (path === "/api/v1/wall/login" && method === "POST") {
+    return withCors(async (req) => {
+      const raw = req.headers.get("X-API-Key") ?? req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+      if (!(await verifyApiKey(raw))) return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return wallLoginHandler(req);
+    })(req);
+  }
+  // Admin management (the print-admin backoffice)
+  if (path === "/api/v1/wall/users") {
+    if (method === "GET")  return withCors(withAdminAuth(listWallUsersHandler))(req);
+    if (method === "POST") return withCors(withAdminAuth(createWallUserHandler))(req);
+  }
+  const wallUserMatch = path.match(/^\/api\/v1\/wall\/users\/([^/]+)$/);
+  if (wallUserMatch && method === "DELETE") {
+    const username = decodeURIComponent(wallUserMatch[1]!);
+    return withCors(withAdminAuth((req) => deleteWallUserHandler(req, username)))(req);
   }
 
   return withCors(() => Response.json({ error: "Not found" }, { status: 404 }))(req);

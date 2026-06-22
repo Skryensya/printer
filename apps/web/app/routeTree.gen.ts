@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WallUsersRouteImport } from './routes/wall-users'
 import { Route as QueueRouteImport } from './routes/queue'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as KeysRouteImport } from './routes/keys'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as IndexRouteImport } from './routes/index'
 
+const WallUsersRoute = WallUsersRouteImport.update({
+  id: '/wall-users',
+  path: '/wall-users',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QueueRoute = QueueRouteImport.update({
   id: '/queue',
   path: '/queue',
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/keys': typeof KeysRoute
   '/login': typeof LoginRoute
   '/queue': typeof QueueRoute
+  '/wall-users': typeof WallUsersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/keys': typeof KeysRoute
   '/login': typeof LoginRoute
   '/queue': typeof QueueRoute
+  '/wall-users': typeof WallUsersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,14 @@ export interface FileRoutesById {
   '/keys': typeof KeysRoute
   '/login': typeof LoginRoute
   '/queue': typeof QueueRoute
+  '/wall-users': typeof WallUsersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/docs' | '/keys' | '/login' | '/queue'
+  fullPaths: '/' | '/docs' | '/keys' | '/login' | '/queue' | '/wall-users'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/docs' | '/keys' | '/login' | '/queue'
-  id: '__root__' | '/' | '/docs' | '/keys' | '/login' | '/queue'
+  to: '/' | '/docs' | '/keys' | '/login' | '/queue' | '/wall-users'
+  id: '__root__' | '/' | '/docs' | '/keys' | '/login' | '/queue' | '/wall-users'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,10 +86,18 @@ export interface RootRouteChildren {
   KeysRoute: typeof KeysRoute
   LoginRoute: typeof LoginRoute
   QueueRoute: typeof QueueRoute
+  WallUsersRoute: typeof WallUsersRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/wall-users': {
+      id: '/wall-users'
+      path: '/wall-users'
+      fullPath: '/wall-users'
+      preLoaderRoute: typeof WallUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/queue': {
       id: '/queue'
       path: '/queue'
@@ -125,6 +142,7 @@ const rootRouteChildren: RootRouteChildren = {
   KeysRoute: KeysRoute,
   LoginRoute: LoginRoute,
   QueueRoute: QueueRoute,
+  WallUsersRoute: WallUsersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

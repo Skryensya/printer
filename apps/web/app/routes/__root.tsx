@@ -8,7 +8,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { Printer, Loader2, KeyRound, ListOrdered, LayoutGrid, BookOpen } from "lucide-react";
+import { Printer, Loader2, KeyRound, ListOrdered, LayoutGrid, BookOpen, Users } from "lucide-react";
 import { getAgentStatus, type AgentStatus } from "~/api";
 import { fetchSessionFn, logoutFn } from "~/session";
 import "~/styles.css";
@@ -96,6 +96,7 @@ function SiteHeader({ onLogout }: { onLogout: () => void }) {
           <NavLink to="/" icon={LayoutGrid}>Playground</NavLink>
           <NavLink to="/queue" icon={ListOrdered}>Queue</NavLink>
           <NavLink to="/keys" icon={KeyRound}>Keys</NavLink>
+          <NavLink to="/wall-users" icon={Users}>Wall</NavLink>
           <NavLink to="/docs" icon={BookOpen}>Docs</NavLink>
         </nav>
         <div className="flex items-center gap-3">

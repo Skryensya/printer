@@ -229,6 +229,29 @@ export async function getMyKey(apiKey: string): Promise<KeyInfo | null> {
   }
 }
 
+// ─── Wall accounts (admin backoffice) ─────────────────────────────────────────
+
+export interface WallUser {
+  username:     string;
+  display_name: string;
+  created_at:   number;
+}
+
+export async function listWallUsers(): Promise<WallUser[]> {
+  const res = await get<{ users: WallUser[] }>("/api/v1/wall/users", true);
+  return res.users;
+}
+
+export async function createWallUser(params: { username: string; password: string; display_name?: string }): Promise<WallUser> {
+  const r = await call({ method: "POST", path: "/api/v1/wall/users", body: params, admin: true });
+  if (!r.ok) throw new Error(errorOf(r));
+  return parseBody<{ user: WallUser }>(r).user;
+}
+
+export function deleteWallUser(username: string) {
+  return del(`/api/v1/wall/users/${encodeURIComponent(username)}`, true);
+}
+
 // ─── WebSocket URL ────────────────────────────────────────────────────────────
 
 // Returns a watch WebSocket URL carrying a short-lived signed token (no admin

@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Printer, Loader2, Sun, Moon } from "lucide-react";
+import { Printer, Loader2, Sun, Moon, LogOut } from "lucide-react";
 import { fetchWallFn, submitMessageFn, type WallSnapshot } from "~/api";
+import { loginFn, logoutFn } from "~/session";
 import { getRecaptchaToken } from "~/lib/recaptcha";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -39,6 +40,45 @@ function ThemeToggle() {
   );
 }
 
+function LoginPanel({ onDone }: { onDone: () => void }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError]       = useState("");
+  const [busy, setBusy]         = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError("");
+    try {
+      const r = await loginFn({ data: { username, password } });
+      if (r.ok) onDone();
+      else setError(r.error ?? "No se pudo iniciar sesión");
+    } catch { setError("No se pudo iniciar sesión"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <p className="text-[13px] text-muted-foreground">
+        Inicia sesión para escribir sin límites. Las cuentas las doy yo — no hay registro.
+      </p>
+      <Input value={username} onChange={e => setUsername(e.target.value)}
+        placeholder="usuario" autoCapitalize="none" disabled={busy} className="bg-input-bg" />
+      <Input value={password} onChange={e => setPassword(e.target.value)}
+        type="password" placeholder="contraseña" disabled={busy} className="bg-input-bg" />
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={busy || !username || !password} size="sm" className="rounded-full px-4">
+          {busy ? <Loader2 size={14} className="animate-spin" /> : "Entrar"}
+        </Button>
+        <button type="button" onClick={onDone} className="text-xs text-muted-foreground hover:text-foreground">
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function WallPage() {
   const initial = Route.useLoaderData() as WallSnapshot;
 
@@ -49,10 +89,12 @@ function WallPage() {
   const [error, setError]       = useState("");
   const [sending, setSending]   = useState(false);
   const [cooldown, setCooldown] = useState(initial.cooldownRemaining);
+  const [showLogin, setShowLogin] = useState(false);
 
+  const user = snapshot.user;            // logged-in account name, or null
   const mountedAt = useRef(Date.now());
 
-  // Remember the visitor's name across visits.
+  // Remember the anonymous visitor's name across visits (not used when logged in).
   useEffect(() => {
     try { const w = localStorage.getItem("wall:who"); if (w) setFrom(w); } catch {}
   }, []);
@@ -80,7 +122,7 @@ function WallPage() {
   }, [cooldown]);
 
   const remaining = MAX - message.length;
-  const onCooldown = cooldown > 0;
+  const onCooldown = !user && cooldown > 0;          // logged-in accounts have no cooldown
   const canSend = !sending && !onCooldown && message.trim().length > 0 && remaining >= 0;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -127,7 +169,20 @@ function WallPage() {
               <Printer size={15} />
               <span>la impresora de Allison</span>
             </div>
-            <ThemeToggle />
+            <div className="flex items-center gap-1">
+              {user ? (
+                <button onClick={async () => { await logoutFn(); refresh(); }}
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2.5 py-1 rounded-full hover:bg-accent transition-colors">
+                  {user} <LogOut size={13} />
+                </button>
+              ) : (
+                <button onClick={() => setShowLogin(v => !v)}
+                  className="text-xs text-muted-foreground hover:text-foreground px-2.5 py-1 rounded-full hover:bg-accent transition-colors">
+                  Iniciar sesión
+                </button>
+              )}
+              <ThemeToggle />
+            </div>
           </div>
           <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] tracking-tight">
             Mándame algo.
@@ -138,14 +193,25 @@ function WallPage() {
           </p>
         </header>
 
+        {/* Login (anonymous only) */}
+        {!user && showLogin && (
+          <LoginPanel onDone={() => { setShowLogin(false); refresh(); }} />
+        )}
+
         {/* Composer */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="from" className="text-xs text-muted-foreground">Tu nombre</Label>
-            <Input id="from" value={from} onChange={e => setFrom(e.target.value)}
-              placeholder="anónimo" maxLength={24} disabled={sending || onCooldown}
-              className="bg-input-bg" />
-          </div>
+          {user ? (
+            <p className="text-xs text-muted-foreground">
+              Escribiendo como <span className="font-medium text-foreground">{user}</span>.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              <Label htmlFor="from" className="text-xs text-muted-foreground">Tu nombre</Label>
+              <Input id="from" value={from} onChange={e => setFrom(e.target.value)}
+                placeholder="anónimo" maxLength={24} disabled={sending || onCooldown}
+                className="bg-input-bg" />
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
@@ -173,7 +239,9 @@ function WallPage() {
 
           <div className="flex items-center justify-between gap-4 pt-1">
             <p className="text-xs text-muted-foreground/80 leading-snug">
-              {onCooldown
+              {user
+                ? "Sin límite — escribe lo que quieras."
+                : onCooldown
                 ? `Un mensaje por visitante. Vuelve en ${formatCooldown(cooldown)}.`
                 : "Un mensaje por visitante cada 30 minutos."}
             </p>
