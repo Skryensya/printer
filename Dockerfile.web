@@ -5,7 +5,7 @@ WORKDIR /app
 # source of the other apps is NOT copied). Not --frozen: the committed lock is
 # generated on macOS, and platform-specific native deps (sharp, usb) differ on
 # the linux build host, which a frozen lock would reject.
-COPY package.json bun.lock ./
+COPY package.json bun.lock tsconfig.base.json ./
 COPY packages/core/package.json ./packages/core/
 COPY apps/web/package.json   ./apps/web/
 COPY apps/api/package.json   ./apps/api/
