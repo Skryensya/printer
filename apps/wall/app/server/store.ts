@@ -17,11 +17,25 @@ export interface QueueEntry {
   from:      string;
   ip:        string;        // never sent to the client
   username:  string | null; // set when a logged-in account sent it; null = anon
+  hasImage:  boolean;       // an attached photo to print after the message
   status:    EntryStatus;
   createdAt: number;
   printedAt: number | null;
   jobId:     string | null; // id returned by the printer API
   error:     string | null;
+}
+
+// Attached photos live in memory only — NOT persisted to the JSON state file
+// (base64 would bloat it). They drain within seconds; a restart mid-flight just
+// drops the unsent photo, which is acceptable.
+const pendingImages = new Map<string, { data: string; mediaType: string }>();
+
+export function getImage(id: string): { data: string; mediaType: string } | undefined {
+  return pendingImages.get(id);
+}
+
+export function dropImage(id: string): void {
+  pendingImages.delete(id);
 }
 
 // What we know about how much the API will still let us send. `null` for a
@@ -109,22 +123,31 @@ export function clearCooldown(ip: string): void {
 
 // ─── Queue ──────────────────────────────────────────────────────────────────
 
-export function enqueue(message: string, from: string, ip: string, username: string | null = null): QueueEntry {
+export function enqueue(
+  message: string, from: string, ip: string,
+  username: string | null = null,
+  image: { data: string; mediaType: string } | null = null,
+): QueueEntry {
   const entry: QueueEntry = {
     id:        crypto.randomUUID(),
     message,
     from,
     ip,
     username,
+    hasImage:  !!image,
     status:    "pending",
     createdAt: Date.now(),
     printedAt: null,
     jobId:     null,
     error:     null,
   };
+  if (image) pendingImages.set(entry.id, image);
   const s = getState();
   s.queue.unshift(entry);
-  if (s.queue.length > MAX_QUEUE) s.queue.length = MAX_QUEUE;
+  if (s.queue.length > MAX_QUEUE) {
+    for (const dropped of s.queue.slice(MAX_QUEUE)) pendingImages.delete(dropped.id);
+    s.queue.length = MAX_QUEUE;
+  }
   scheduleSave();
   return entry;
 }

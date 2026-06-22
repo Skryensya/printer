@@ -6,8 +6,8 @@
 // server function handlers — so it only ever runs on the long-lived node server.
 
 import { config } from "./config";
-import { sendMessage } from "./printer";
-import { nextPending, updateEntry, budgetExhausted, clearCooldown } from "./store";
+import { sendMessage, sendImage } from "./printer";
+import { nextPending, updateEntry, budgetExhausted, clearCooldown, getImage, dropImage } from "./store";
 
 let started = false;
 let draining = false;
@@ -22,7 +22,21 @@ async function tick(): Promise<void> {
   draining = true;
   try {
     updateEntry(entry.id, { status: "printing" });
-    const result = await sendMessage(entry.message, entry.from);
+
+    // Print the message (if any), then the attached photo (if any). A logged-in
+    // user may send a photo with no text, so the message step is optional.
+    let result = { ok: true, status: 200, jobId: null as string | null, error: null as string | null };
+    if (entry.message.trim()) {
+      result = await sendMessage(entry.message, entry.from);
+    }
+
+    if (result.ok) {
+      const img = entry.hasImage ? getImage(entry.id) : undefined;
+      if (img) {
+        result = await sendImage(img.data, img.mediaType);
+        if (result.ok) dropImage(entry.id);
+      }
+    }
 
     if (result.ok) {
       updateEntry(entry.id, { status: "printed", jobId: result.jobId, printedAt: Date.now() });

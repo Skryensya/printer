@@ -10,6 +10,7 @@ export interface WallItem {
   message:   string;
   from:      string;
   createdAt: number;
+  hasImage:  boolean;
 }
 
 export interface WallSnapshot {
@@ -24,6 +25,8 @@ export interface SubmitInput {
   recaptchaToken: string;
   website:        string;  // honeypot — real users leave this empty
   elapsedMs:      number;  // time on the form — bots submit near-instantly
+  // Optional photo (logged-in accounts only). Pre-scaled base64 PNG, no data: prefix.
+  image?:         { data: string; mediaType: string } | null;
 }
 
 export type SubmitResult =
@@ -60,6 +63,7 @@ export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): P
       message:   e.message,
       from:      e.from,
       createdAt: e.createdAt,
+      hasImage:  e.hasImage,
     })),
     // Logged-in accounts have no cooldown.
     cooldownRemaining: user ? 0 : cooldownRemaining(ip),
@@ -90,9 +94,17 @@ export const submitMessageFn = createServerFn({ method: "POST" })
       }
     }
 
-    // 2. Validate the message.
+    // 2. Validate. Photos are a logged-in-only perk; cap the payload.
     const message = data.message.trim();
-    if (!message) return { ok: false, error: "El mensaje no puede estar vacío" };
+    let image: { data: string; mediaType: string } | null = null;
+    if (user && data.image?.data) {
+      if (data.image.data.length > 1_500_000) {
+        return { ok: false, error: "La imagen es muy grande" };
+      }
+      image = { data: data.image.data, mediaType: data.image.mediaType || "image/png" };
+    }
+    // A logged-in user may send just a photo; otherwise text is required.
+    if (!message && !image) return { ok: false, error: "El mensaje no puede estar vacío" };
     if (message.length > config.maxMessageLen) {
       return { ok: false, error: `Máximo ${config.maxMessageLen} caracteres` };
     }
@@ -113,7 +125,7 @@ export const submitMessageFn = createServerFn({ method: "POST" })
     }
 
     // 5. Enqueue (tagged with the account if logged in) and run the drainer.
-    const entry = enqueue(message, from, ip, user?.username ?? null);
+    const entry = enqueue(message, from, ip, user?.username ?? null, image);
     ensureDrain();
 
     return { ok: true, id: entry.id, cooldownRemaining: user ? 0 : config.cooldownMs };
