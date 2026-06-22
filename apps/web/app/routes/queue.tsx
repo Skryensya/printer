@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Ban, RefreshCw, Trash2, Printer as PrinterIcon,
   Type, QrCode, Barcode, ImageIcon, Ticket, LayoutGrid,
-  X, CheckSquare, ChevronDown, ChevronsDownUp, ChevronsUpDown,
+  X, CheckSquare, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Check,
 } from "lucide-react";
 import {
   listJobs, getJob, retryJob, reprintJob, cancelJob, deleteJob, watchWsUrl,
@@ -21,6 +21,25 @@ export const Route = createFileRoute("/queue")({
   loader: () => listJobs().catch(() => [] as PrintJob[]),
   component: QueuePage,
 });
+
+// Public API URL — for the replicable curl shown per job. Not a secret.
+const API_BASE = import.meta.env["VITE_API_URL"] ?? "http://localhost:5801";
+
+// Build a curl that re-creates this job as-is. The stored `v` (payload version)
+// is dropped since it's set server-side. Image jobs are excluded (binary body).
+function jobCurl(job: PrintJob): string {
+  const { v: _v, ...body } = (job.payload ?? {}) as Record<string, unknown>;
+  const hasBody = Object.keys(body).length > 0;
+  const lines = [
+    `curl -X POST ${API_BASE}/api/v1/print/${job.type}`,
+    `-H "X-API-Key: YOUR_KEY"`,
+  ];
+  if (hasBody) {
+    lines.push(`-H "Content-Type: application/json"`);
+    lines.push(`-d '${JSON.stringify(body)}'`);
+  }
+  return lines.map((l, i) => (i === 0 ? l : `  ${l}`)).join(" \\\n");
+}
 
 // ─── Job → preview entries ────────────────────────────────────────────────────
 
@@ -112,6 +131,12 @@ function JobRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [fullJob, setFullJob] = useState<PrintJob | null>(null);
   const [loadingImage, setLoadingImage] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function copyCurl() {
+    try { await navigator.clipboard.writeText(jobCurl(job)); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    catch { /* clipboard unavailable */ }
+  }
   const time = new Date(job.created_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const date = new Date(job.created_at * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
 
@@ -203,6 +228,33 @@ function JobRow({
               )}
             </div>
           </div>
+
+          {/* Parameters */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Parameters</p>
+            <pre className="text-[11px] font-mono bg-muted/50 rounded-md px-3 py-2.5 overflow-x-auto leading-relaxed text-foreground whitespace-pre-wrap break-all">
+              {JSON.stringify(job.payload, null, 2)}
+            </pre>
+          </div>
+
+          {/* Replicable curl (everything except image jobs) */}
+          {job.type === "image" ? (
+            <p className="text-[10px] text-muted-foreground">Image jobs can’t be replicated as a curl (binary payload).</p>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">curl</p>
+                <button onClick={copyCurl}
+                  className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-[color,transform] active:scale-[0.96]">
+                  {copied ? <Check size={10} /> : <Copy size={10} />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <pre className="text-[11px] font-mono bg-muted/50 rounded-md px-3 py-2.5 overflow-x-auto leading-relaxed text-foreground whitespace-pre-wrap break-all">
+                {jobCurl(job)}
+              </pre>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-2 pt-1">
