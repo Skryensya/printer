@@ -1,4 +1,5 @@
 import { createWallUser, listWallUsers, deleteWallUser, verifyWallUser } from "../db";
+import { loginLockRemaining, recordLoginFailure, recordLoginSuccess } from "../wall-login-throttle";
 
 function err(msg: string, status = 400): Response {
   return Response.json({ error: msg }, { status });
@@ -40,7 +41,20 @@ export async function wallLoginHandler(req: Request): Promise<Response> {
   const password = body?.password ?? "";
   if (!username || !password) return err("Invalid credentials", 401);
 
+  // Brute-force guard: lock a username after too many failures.
+  const lock = loginLockRemaining(username);
+  if (lock > 0) {
+    return new Response(
+      JSON.stringify({ error: "Too many attempts, try again later", retry_after: lock }),
+      { status: 429, headers: { "Content-Type": "application/json", "Retry-After": String(lock) } },
+    );
+  }
+
   const user = await verifyWallUser(username, password);
-  if (!user) return err("Invalid credentials", 401);
+  if (!user) {
+    recordLoginFailure(username);
+    return err("Invalid credentials", 401);
+  }
+  recordLoginSuccess(username);
   return Response.json({ username: user.username, display_name: user.display_name });
 }
