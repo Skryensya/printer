@@ -1,8 +1,10 @@
 FROM oven/bun:1
 WORKDIR /app
 
-# All workspace manifests are needed for --frozen-lockfile to validate against
-# the monorepo lockfile (the source of the other apps is NOT copied).
+# All workspace manifests so install resolves the whole monorepo graph (the
+# source of the other apps is NOT copied). Not --frozen: the committed lock is
+# generated on macOS, and platform-specific native deps (sharp, usb) differ on
+# the linux build host, which a frozen lock would reject.
 COPY package.json bun.lock ./
 COPY packages/core/package.json ./packages/core/
 COPY apps/web/package.json   ./apps/web/
@@ -10,7 +12,7 @@ COPY apps/api/package.json   ./apps/api/
 COPY apps/agent/package.json ./apps/agent/
 COPY apps/wall/package.json  ./apps/wall/
 
-RUN bun install --frozen-lockfile
+RUN bun install
 
 COPY packages/core ./packages/core
 COPY apps/web ./apps/web
