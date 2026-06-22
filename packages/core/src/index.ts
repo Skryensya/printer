@@ -13,7 +13,7 @@ export type { ImageEffect } from "./dither";
 export type { BarcodeFormat } from "./barcode";
 export { JOB_TYPES, buildJobCommands, executeJob } from "./execute-job";
 export { buildTextPayload, buildTicketPayload, buildTodoPayload, buildQrPayload, buildBarcodePayload, buildImagePayload } from "./execute-job";
-export { buildTodoCard } from "./card-ticket";
+export { buildTodoCard, santiagoTime, santiagoDate } from "./card-ticket";
 export type { JobType, JobPayloadMap } from "./execute-job";
 export type { TodoItem } from "./card-ticket";
 export { parseAgentEvent, parseServerEvent } from "./events";

@@ -1,6 +1,6 @@
 import { enqueue } from "./queue";
 import {
-  buildTextPayload, buildTicketPayload, buildTodoPayload, buildQrPayload, buildImagePayload,
+  buildTextPayload, buildTicketPayload, buildTodoPayload, buildQrPayload, buildImagePayload, santiagoTime,
 } from "@printer/core";
 import type { Job } from "./db";
 import type { PrintTextBody, PrintTicketBody, PrintQrBody, PrintImageBody, PrintTodoBody } from "./types";
@@ -69,9 +69,6 @@ export async function intakeMessage(
   const b = body as { message?: string; from?: string } | null;
   if (!b?.message?.trim()) return reject("body.message is required");
   const from = customFromAllowed && b.from?.trim() ? b.from.trim() : source;
-  const now  = new Date();
-  const hh   = String(now.getHours()).padStart(2, "0");
-  const mm   = String(now.getMinutes()).padStart(2, "0");
-  const card: CardData = { title: b.message.trim(), from, date: `${hh}:${mm}` };
+  const card: CardData = { title: b.message.trim(), from, date: santiagoTime() };
   return { ok: true, job: await enqueue("ticket", buildTicketPayload(card), source) };
 }

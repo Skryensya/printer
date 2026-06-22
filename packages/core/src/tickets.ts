@@ -125,7 +125,7 @@ export function renderLabel(task: Task): string {
 // ─── RECEIPT — receipt/invoice style ─────────────────────────────────────────
 
 export function renderReceipt(task: Task): string {
-  const now = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const now = new Date().toLocaleDateString("en-US", { timeZone: "America/Santiago", month: "short", day: "numeric", year: "numeric" });
   const titleLines = wrap(task.title, W - 2);
   return [
     pad("WORK ORDER", W, "c"),

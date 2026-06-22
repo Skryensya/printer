@@ -1,5 +1,29 @@
 import QRCode from "qrcode";
 
+// ── Time (printer's local zone) ───────────────────────────────────────────────
+// The server runs in UTC; printed cards should show Chile time. Intl handles
+// Chile's DST automatically, so this is correct year-round. Works in both the
+// API (Node/Bun) and the browser preview.
+const PRINTER_TZ = "America/Santiago";
+
+function santiagoParts(d: Date): Record<string, string> {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: PRINTER_TZ, hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+  return Object.fromEntries(fmt.formatToParts(d).map(p => [p.type, p.value]));
+}
+
+export function santiagoTime(d: Date = new Date()): string {
+  const p = santiagoParts(d);
+  return `${p["hour"]}:${p["minute"]}`;            // HH:MM
+}
+
+export function santiagoDate(d: Date = new Date()): string {
+  const p = santiagoParts(d);
+  return `${p["day"]}/${p["month"]}/${p["year"]!.slice(2)}`; // DD/MM/YY
+}
+
 // ── Public type ───────────────────────────────────────────────────────────────
 
 export interface CardData {
@@ -18,14 +42,10 @@ export type TodoItem = string | [string, string];
 // Render a to-do payload into a card. Lives here (not execute-job) so the web
 // preview can import it via @printer/core/render without pulling in sharp/usb.
 export function buildTodoCard(p: { items: TodoItem[]; title?: string; badge?: string }): CardData {
-  const now = new Date();
-  const dd  = String(now.getDate()).padStart(2, "0");
-  const mm  = String(now.getMonth() + 1).padStart(2, "0");
-  const yy  = String(now.getFullYear()).slice(2);
   const rows: [string, string, string][] = p.items.map(i =>
     Array.isArray(i) ? ["[ ]", i[0], i[1] || ""] : ["[ ]", i, ""],
   );
-  return { label: p.title || undefined, badge: p.badge || undefined, date: `${dd}/${mm}/${yy}`, rows };
+  return { label: p.title || undefined, badge: p.badge || undefined, date: santiagoDate(), rows };
 }
 
 // ── Layout constants ──────────────────────────────────────────────────────────
