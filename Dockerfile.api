@@ -7,10 +7,14 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends libusb-1.0-0 \
   && rm -rf /var/lib/apt/lists/*
 
-# Install workspace deps (root + api + core manifests first for layer caching)
+# All workspace manifests are needed for --frozen-lockfile to validate against
+# the monorepo lockfile (the source of the other apps is NOT copied).
 COPY package.json bun.lock ./
 COPY packages/core/package.json ./packages/core/
-COPY apps/api/package.json ./apps/api/
+COPY apps/api/package.json   ./apps/api/
+COPY apps/web/package.json   ./apps/web/
+COPY apps/agent/package.json ./apps/agent/
+COPY apps/wall/package.json  ./apps/wall/
 
 RUN bun install --frozen-lockfile
 
