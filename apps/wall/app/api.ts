@@ -45,7 +45,7 @@ function clientIp(): string {
 export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): Promise<WallSnapshot> => {
   const { listQueueForIp, cooldownRemaining } = await import("./server/store");
   const { ensureDrain } = await import("./server/drain");
-  const { currentUser } = await import("./session");
+  const { currentUser } = await import("./server/auth");
   ensureDrain();
 
   const ip   = clientIp();
@@ -73,7 +73,7 @@ export const submitMessageFn = createServerFn({ method: "POST" })
     const { cooldownRemaining, recordSubmission, enqueue } = await import("./server/store");
     const { verifyRecaptcha } = await import("./server/recaptcha");
     const { ensureDrain } = await import("./server/drain");
-    const { currentUser } = await import("./session");
+    const { currentUser } = await import("./server/auth");
 
     const ip   = clientIp();
     const user = await currentUser();

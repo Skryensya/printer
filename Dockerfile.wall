@@ -1,0 +1,33 @@
+FROM oven/bun:1
+WORKDIR /app
+
+# All workspace manifests so install resolves the whole monorepo graph (the
+# source of the other apps is NOT copied). Not --frozen: the committed lock is
+# generated on macOS, and platform-specific native deps differ on the linux
+# build host, which a frozen lock would reject.
+COPY package.json bun.lock tsconfig.base.json ./
+COPY packages/core/package.json ./packages/core/
+COPY apps/wall/package.json  ./apps/wall/
+COPY apps/web/package.json   ./apps/web/
+COPY apps/api/package.json   ./apps/api/
+COPY apps/agent/package.json ./apps/agent/
+
+RUN bun install
+
+COPY packages/core ./packages/core
+COPY apps/wall ./apps/wall
+
+# Only the public reCAPTCHA site key is baked into the client bundle. Everything
+# secret (WALL_API_KEY, SESSION_SECRET, reCAPTCHA secret) is server-side runtime
+# env, so it never ships to the browser.
+ARG VITE_WALL_RECAPTCHA_SITE_KEY
+ENV VITE_WALL_RECAPTCHA_SITE_KEY=$VITE_WALL_RECAPTCHA_SITE_KEY
+
+RUN cd apps/wall && bun run build
+
+# The build emits a fetch handler (dist/) served via server.ts (Bun.serve).
+# Runtime env (Dokploy): WALL_API_URL, WALL_API_KEY, SESSION_SECRET,
+# WALL_COOLDOWN_MS, WALL_RECAPTCHA_SECRET, WALL_DATA_DIR.
+WORKDIR /app/apps/wall
+EXPOSE 3000
+CMD ["bun", "server.ts"]
