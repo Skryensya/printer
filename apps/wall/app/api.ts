@@ -43,7 +43,7 @@ function clientIp(): string {
 // ─── fetchWall ────────────────────────────────────────────────────────────────
 
 export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): Promise<WallSnapshot> => {
-  const { listQueueForIp, cooldownRemaining } = await import("./server/store");
+  const { listQueueForIp, listQueueForUser, cooldownRemaining } = await import("./server/store");
   const { ensureDrain } = await import("./server/drain");
   const { currentUser } = await import("./server/auth");
   ensureDrain();
@@ -51,8 +51,11 @@ export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): P
   const ip   = clientIp();
   const user = await currentUser();
 
+  // Logged in → your account's messages (across devices); anon → this IP's.
+  const items = user ? listQueueForUser(user.username) : listQueueForIp(ip);
+
   return {
-    items: listQueueForIp(ip).map(e => ({
+    items: items.map(e => ({
       id:        e.id,
       message:   e.message,
       from:      e.from,
@@ -109,8 +112,8 @@ export const submitMessageFn = createServerFn({ method: "POST" })
       recordSubmission(ip);
     }
 
-    // 5. Enqueue and make sure the drainer is running.
-    const entry = enqueue(message, from, ip);
+    // 5. Enqueue (tagged with the account if logged in) and run the drainer.
+    const entry = enqueue(message, from, ip, user?.username ?? null);
     ensureDrain();
 
     return { ok: true, id: entry.id, cooldownRemaining: user ? 0 : config.cooldownMs };

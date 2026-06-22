@@ -16,6 +16,7 @@ export interface QueueEntry {
   message:   string;
   from:      string;
   ip:        string;        // never sent to the client
+  username:  string | null; // set when a logged-in account sent it; null = anon
   status:    EntryStatus;
   createdAt: number;
   printedAt: number | null;
@@ -108,12 +109,13 @@ export function clearCooldown(ip: string): void {
 
 // ─── Queue ──────────────────────────────────────────────────────────────────
 
-export function enqueue(message: string, from: string, ip: string): QueueEntry {
+export function enqueue(message: string, from: string, ip: string, username: string | null = null): QueueEntry {
   const entry: QueueEntry = {
     id:        crypto.randomUUID(),
     message,
     from,
     ip,
+    username,
     status:    "pending",
     createdAt: Date.now(),
     printedAt: null,
@@ -146,9 +148,14 @@ export function listQueue(): QueueEntry[] {
   return getState().queue;
 }
 
-// Only the entries submitted from this IP — each visitor sees just their own.
+// Only the entries submitted from this IP — each anonymous visitor sees their own.
 export function listQueueForIp(ip: string): QueueEntry[] {
   return getState().queue.filter(e => e.ip === ip);
+}
+
+// A logged-in account's own messages, across IPs/devices.
+export function listQueueForUser(username: string): QueueEntry[] {
+  return getState().queue.filter(e => e.username === username);
 }
 
 export function pendingCount(): number {

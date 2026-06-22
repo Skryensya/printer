@@ -253,11 +253,13 @@ function WallPage() {
           </div>
         </form>
 
-        {/* Your own messages — nobody sees anyone else's */}
+        {/* Your own messages — logged-in: your account's history; anon: this device's */}
         {snapshot.items.length > 0 && (
           <section className="space-y-3">
             <div className="flex items-center gap-3">
-              <h2 className="font-display text-sm tracking-wide text-muted-foreground">Lo que has enviado</h2>
+              <h2 className="font-display text-sm tracking-wide text-muted-foreground">
+                {user ? "Tu historial" : "Lo que has enviado"}
+              </h2>
               <span className="h-px flex-1 bg-border" />
             </div>
 
@@ -272,7 +274,9 @@ function WallPage() {
             </div>
 
             <p className="text-[11px] text-muted-foreground/60 text-center pt-1">
-              Solo tú ves tus mensajes. Se imprimen en mi escritorio.
+              {user
+                ? "El historial de tu cuenta, en cualquier dispositivo donde inicies sesión."
+                : "Solo tú ves tus mensajes. Se imprimen en mi escritorio."}
             </p>
           </section>
         )}
