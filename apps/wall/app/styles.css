@@ -4,39 +4,25 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ─── Extended palette tokens ─────────────────────────────────────────────── */
+/* ─── Type + palette (matches allison.sh: Flexoki paper, Satoshi + Clash) ───── */
 @theme {
-  --font-mono: "Berkeley Mono", "Fira Code", "JetBrains Mono", ui-monospace, monospace;
+  --font-sans:    "Satoshi", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Clash Grotesk", "Satoshi", ui-sans-serif, sans-serif;
+  --font-mono:    "Berkeley Mono", ui-monospace, monospace;
 
-  /* Thermal paper primitives */
-  --color-paper:       #f5f0e8;
-  --color-roll:        #e8e0d0;
-  --color-ink:         #1a1a1a;
-
-  /* Surface scale */
-  --color-surface-0:   oklch(0.998 0.002 85);   /* near-white — inputs, popovers */
-  --color-surface-1:   oklch(0.977 0.006 86);   /* cards */
-  --color-surface-2:   oklch(0.955 0.011 87);   /* page background */
-  --color-surface-3:   oklch(0.900 0.016 80);   /* secondary / muted */
-  --color-surface-4:   oklch(0.860 0.020 76);   /* accent / hover */
-  --color-surface-5:   oklch(0.800 0.018 74);   /* borders */
-
-  /* Green family */
-  --color-green-vivid:  oklch(0.44  0.14  148);  /* primary action */
-  --color-green-mid:    oklch(0.58  0.13  148);  /* hover / lighter */
-  --color-green-muted:  oklch(0.94  0.026 148);  /* green tint surfaces */
-
-  /* Amber family */
-  --color-amber-vivid:  oklch(0.63  0.16  68);   /* warning / highlight */
-  --color-amber-muted:  oklch(0.91  0.055 74);   /* amber tint surface */
-
-  /* Teal family */
-  --color-teal-vivid:   oklch(0.48  0.12  196);  /* info / link */
-  --color-teal-muted:   oklch(0.92  0.042 193);  /* teal tint surface */
-
-  /* Red family */
-  --color-red-vivid:    oklch(0.40  0.145 22);   /* destructive */
-  --color-red-muted:    oklch(0.92  0.04  22);   /* error surface */
+  /* Flexoki light */
+  --color-paper:    #fffcf0;
+  --color-base-50:  #f2f0e5;
+  --color-base-100: #e6e4d9;
+  --color-base-150: #dad8ce;
+  --color-base-200: #cecdc3;
+  --color-base-300: #b7b5ac;
+  --color-base-500: #878580;
+  --color-base-600: #6f6e69;
+  --color-ink:      #100f0f;
+  --color-red:      #af3029;
+  --color-amber:    #ad8301;
+  --color-green:    #66800b;
 }
 
 /* ─── Shadcn semantic tokens ──────────────────────────────────────────────── */
@@ -68,50 +54,52 @@
   --color-ring:                 var(--ring);
 }
 
-/* ─── Light theme ─────────────────────────────────────────────────────────── */
+/* ─── Theme — warm paper ──────────────────────────────────────────────────── */
 :root {
-  --radius: 0.5rem;
+  --radius: 0.75rem;
 
-  --background:           oklch(0.955 0.011 87);
-  --foreground:           oklch(0.11  0.006 75);
+  --background:           #fffcf0;
+  --foreground:           #100f0f;
 
-  --card:                 oklch(0.977 0.006 86);
-  --card-foreground:      oklch(0.11  0.006 75);
-  --popover:              oklch(0.995 0.003 85);
-  --popover-foreground:   oklch(0.11  0.006 75);
+  --card:                 #faf8ef;
+  --card-foreground:      #100f0f;
+  --popover:              #fffcf0;
+  --popover-foreground:   #100f0f;
 
-  --primary:              oklch(0.44  0.14  148);
-  --primary-foreground:   oklch(0.99  0     0);
+  --primary:              #100f0f;
+  --primary-foreground:   #fffcf0;
 
-  --secondary:            oklch(0.900 0.016 80);
-  --secondary-foreground: oklch(0.18  0.008 75);
+  --secondary:            #e6e4d9;
+  --secondary-foreground: #100f0f;
 
-  --muted:                oklch(0.900 0.016 80);
-  --muted-foreground:     oklch(0.50  0.022 72);
+  --muted:                #f2f0e5;
+  --muted-foreground:     #878580;
 
-  --accent:               oklch(0.862 0.022 76);
-  --accent-foreground:    oklch(0.18  0.008 75);
+  --accent:               #e6e4d9;
+  --accent-foreground:    #100f0f;
 
-  --destructive:          oklch(0.40  0.145 22);
+  --destructive:          #af3029;
 
-  --border:               oklch(0.800 0.018 74);
-  --input:                oklch(0.800 0.018 74);
-  --input-bg:             oklch(0.993 0.003 85);
-  --ring:                 oklch(0.44  0.14  148);
+  --border:               #dad8ce;
+  --input:                #cecdc3;
+  --input-bg:             #fffcf0;
+  --ring:                 #100f0f;
 }
 
 /* ─── Base ────────────────────────────────────────────────────────────────── */
 @layer base {
   * {
-    @apply border-border outline-ring/50;
-    font-family: var(--font-mono);
+    @apply border-border outline-ring/40;
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  h1, h2, h3, h4 {
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
     text-wrap: balance;
   }
 }

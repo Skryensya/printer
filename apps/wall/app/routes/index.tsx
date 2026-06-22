@@ -22,11 +22,11 @@ function formatCooldown(ms: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-const STATUS_STYLE: Record<WallItem["status"], string> = {
-  pending:  "text-amber-600",
-  printing: "text-primary",
-  printed:  "text-muted-foreground",
-  failed:   "text-destructive",
+const STATUS_META: Record<WallItem["status"], { label: string; dot: string }> = {
+  pending:  { label: "en cola",     dot: "bg-[var(--color-amber)]" },
+  printing: { label: "imprimiendo", dot: "bg-[var(--color-green)] animate-pulse" },
+  printed:  { label: "impreso",     dot: "bg-[var(--color-base-300)]" },
+  failed:   { label: "falló",       dot: "bg-[var(--color-red)]" },
 };
 
 function WallPage() {
@@ -101,40 +101,48 @@ function WallPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-10">
-      <div className="w-full max-w-xl space-y-8">
+    <div className="min-h-screen flex flex-col items-center px-5 py-16 sm:py-24">
+      <div className="w-full max-w-lg space-y-12">
 
         {/* Header */}
-        <header className="flex items-center gap-2">
-          <Printer size={18} className="text-primary" />
-          <h1 className="text-lg font-semibold tracking-tight">Printer Wall</h1>
-          <span className="ml-auto text-xs text-muted-foreground">
-            {snapshot.pending > 0 ? `${snapshot.pending} in queue` : "idle"}
-          </span>
+        <header className="space-y-4">
+          <div className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
+            <Printer size={15} />
+            <span>la impresora de Allison</span>
+          </div>
+          <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] tracking-tight">
+            Mándame algo.
+          </h1>
+          <p className="text-[15px] leading-relaxed text-muted-foreground max-w-md">
+            Escríbelo aquí y sale impreso en papel, en la impresora que tengo en
+            mi escritorio. Lo voy a leer.
+          </p>
         </header>
 
         {/* Composer */}
-        <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-border bg-card p-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="from">Name</Label>
+            <Label htmlFor="from" className="text-xs text-muted-foreground">Tu nombre</Label>
             <Input id="from" value={from} onChange={e => setFrom(e.target.value)}
-              placeholder="anon" maxLength={24} disabled={sending || onCooldown} />
+              placeholder="anónimo" maxLength={24} disabled={sending || onCooldown}
+              className="bg-input-bg" />
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="message">Message</Label>
-              <span className={`text-xs [font-variant-numeric:tabular-nums] ${remaining < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+              <Label htmlFor="message" className="text-xs text-muted-foreground">Mensaje</Label>
+              <span className={`text-xs [font-variant-numeric:tabular-nums] ${remaining < 0 ? "text-destructive" : "text-muted-foreground/70"}`}>
                 {remaining}
               </span>
             </div>
             <Textarea id="message" value={message} onChange={e => setMessage(e.target.value)}
-              placeholder="Say something — it prints on real paper." rows={3}
-              disabled={sending || onCooldown} />
+              placeholder="Di algo — se imprime en papel de verdad." rows={4}
+              disabled={sending || onCooldown}
+              className="bg-input-bg resize-none leading-relaxed" />
           </div>
 
           {/* Honeypot — visually hidden, off-screen, not focusable. Bots fill it. */}
-          <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden" >
+          <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
             <label>
               Website
               <input type="text" tabIndex={-1} autoComplete="off" value={website}
@@ -144,39 +152,61 @@ function WallPage() {
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
+          <div className="flex items-center justify-between gap-4 pt-1">
+            <p className="text-xs text-muted-foreground/80 leading-snug">
               {onCooldown
-                ? `One message per visitor — try again in ${formatCooldown(cooldown)}`
-                : "One message per visitor every 30 minutes."}
+                ? `Un mensaje por visitante. Vuelve en ${formatCooldown(cooldown)}.`
+                : "Un mensaje por visitante cada 30 minutos."}
             </p>
-            <Button type="submit" disabled={!canSend} className="gap-1.5">
-              {sending ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
-              {sending ? "Sending…" : "Print it"}
+            <Button type="submit" disabled={!canSend} size="lg"
+              className="gap-2 rounded-full px-5 shrink-0 transition-[transform,background-color] active:scale-[0.96]">
+              {sending ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
+              {sending ? "Enviando…" : "Imprimir"}
             </Button>
           </div>
         </form>
 
         {/* Wall */}
-        <section className="space-y-2">
+        <section className="space-y-3">
+          <div className="flex items-center gap-3">
+            <h2 className="font-display text-sm tracking-wide text-muted-foreground">Lo último</h2>
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground/70">
+              {snapshot.pending > 0 ? `${snapshot.pending} en cola` : "al día"}
+            </span>
+          </div>
+
           {snapshot.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              Nothing yet. Be the first to print something.
+            <p className="text-sm text-muted-foreground text-center py-10">
+              Todavía nada. Sé el primero en imprimir algo.
             </p>
           ) : (
-            snapshot.items.map(item => (
-              <article key={item.id} className="rounded-lg border border-border bg-card px-4 py-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium">{item.from}</span>
-                  <span className={`ml-auto text-[10px] uppercase tracking-wide ${STATUS_STYLE[item.status]}`}>
-                    {item.status}
-                  </span>
-                </div>
-                <p className="text-sm whitespace-pre-wrap break-words">{item.message}</p>
-              </article>
-            ))
+            <div className="space-y-2.5">
+              {snapshot.items.map(item => {
+                const s = STATUS_META[item.status];
+                return (
+                  <article key={item.id}
+                    className="rounded-xl border border-border bg-card px-4 py-3.5 shadow-[0_1px_0_rgba(16,15,15,0.03)]">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[13px] font-medium">{item.from}</span>
+                      <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+                        <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                        {s.label}
+                      </span>
+                    </div>
+                    <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{item.message}</p>
+                  </article>
+                );
+              })}
+            </div>
           )}
         </section>
+
+        <footer className="pt-4 text-center">
+          <a href="https://allison.sh" className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors">
+            allison.sh
+          </a>
+        </footer>
 
       </div>
     </div>
