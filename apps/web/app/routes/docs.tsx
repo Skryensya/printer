@@ -2,8 +2,25 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Lock, ShieldCheck, KeyRound, Copy, Check, Upload, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { getMyKey, type KeyInfo } from "~/api";
+import { fetchSessionFn } from "~/session";
 
 export const Route = createFileRoute("/docs")({ component: DocsPage });
+
+// Which permission a print endpoint needs, derived from its path. Non-print
+// endpoints return null (e.g. GET /jobs/:id, usable by any key).
+function printPerm(path: string): string | null {
+  return path.match(/^\/api\/v1\/print\/([a-z]+)$/)?.[1] ?? null;
+}
+
+// Whether the holder of `allowed` (a key's allowed_types; null = all) can use ep.
+function keyCanUse(ep: Endpoint, allowed: string[] | null): boolean {
+  if (ep.auth === "admin") return false;          // a service key is never admin
+  const perm = printPerm(ep.path);
+  if (!perm) return true;                          // service endpoint without a print type
+  if (allowed === null) return true;               // unrestricted key
+  if (perm === "message") return allowed.includes("message") || allowed.includes("message_custom");
+  return allowed.includes(perm);
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -692,6 +709,11 @@ function DocsPage() {
     try { return localStorage.getItem("docs:apiKey") ?? ""; } catch { return ""; }
   });
   const [keyInfo, setKeyInfo] = useState<KeyInfo | null | "loading" | "error">(null);
+  const [authed, setAuthed] = useState(false);
+
+  useEffect(() => {
+    fetchSessionFn().then(s => setAuthed(s.authenticated === true)).catch(() => setAuthed(false));
+  }, []);
 
   useEffect(() => {
     if (!apiKey.trim()) { setKeyInfo(null); return; }
@@ -701,6 +723,25 @@ function DocsPage() {
     }, 500);
     return () => clearTimeout(timer);
   }, [apiKey]);
+
+  // A validated key, or null. When present, docs show only what THIS key can do.
+  const validKey: KeyInfo | null =
+    keyInfo && keyInfo !== "loading" && keyInfo !== "error" ? keyInfo : null;
+
+  // What to show:
+  //  - valid key  → only the endpoints that key is allowed to use
+  //  - no key, admin session → full reference
+  //  - no key, public → nothing (prompt to paste a key)
+  const visibleSections: Section[] = validKey
+    ? SECTIONS
+        .map(s => ({ ...s, endpoints: s.endpoints.filter(ep => keyCanUse(ep, validKey.allowed_types)) }))
+        .filter(s => s.endpoints.length > 0)
+    : authed
+    ? SECTIONS
+    : [];
+
+  // The auth legend + filter only make sense in the full-reference (admin, no key) view.
+  const showReference = !validKey && authed;
 
   function updateApiKey(v: string) {
     setApiKey(v);
@@ -748,51 +789,68 @@ function DocsPage() {
           <KeyInfoBanner info={keyInfo} />
         </div>
 
-        {/* Auth legend */}
-        <div>
-          <h2 className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-3">Authentication</h2>
-          <div className="grid grid-cols-2 gap-2">
-            {(Object.keys(AUTH_META) as AuthLevel[]).map(level => {
-              const m = AUTH_META[level];
-              const Icon = m.icon;
-              return (
-                <div key={level} className={`rounded-lg border border-border p-3 ${m.row}`}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Icon size={12} className={m.pill.split(" ")[0]} />
-                    <AuthPill auth={level} />
-                  </div>
-                  <p className="text-xs text-foreground leading-relaxed">{m.desc}</p>
-                  <code className="text-[11px] text-muted-foreground font-mono mt-1.5 block">{m.how}</code>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        {/* Auth legend + filter — only in the full-reference view (admin, no key) */}
+        {showReference && (
+          <>
+            <div>
+              <h2 className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-3">Authentication</h2>
+              <div className="grid grid-cols-2 gap-2">
+                {(Object.keys(AUTH_META) as AuthLevel[]).map(level => {
+                  const m = AUTH_META[level];
+                  const Icon = m.icon;
+                  return (
+                    <div key={level} className={`rounded-lg border border-border p-3 ${m.row}`}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Icon size={12} className={m.pill.split(" ")[0]} />
+                        <AuthPill auth={level} />
+                      </div>
+                      <p className="text-xs text-foreground leading-relaxed">{m.desc}</p>
+                      <code className="text-[11px] text-muted-foreground font-mono mt-1.5 block">{m.how}</code>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-        {/* Filter bar */}
-        <div className="flex items-center gap-3 border-b border-border pb-2">
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold shrink-0">Filter</span>
-          <div className="flex gap-1 flex-wrap">
-            {AUTH_FILTERS.map(f => (
-              <button
-                key={f.value}
-                onClick={() => setAuthFilter(f.value as AuthLevel | "all")}
-                className={[
-                  "px-2.5 py-1 rounded-md text-xs transition-colors border",
-                  authFilter === f.value
-                    ? "bg-foreground text-background border-foreground font-medium"
-                    : "text-muted-foreground border-border/60 hover:text-foreground hover:bg-accent hover:border-border",
-                ].join(" ")}
-              >
-                {f.label}
-              </button>
-            ))}
+            <div className="flex items-center gap-3 border-b border-border pb-2">
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold shrink-0">Filter</span>
+              <div className="flex gap-1 flex-wrap">
+                {AUTH_FILTERS.map(f => (
+                  <button
+                    key={f.value}
+                    onClick={() => setAuthFilter(f.value as AuthLevel | "all")}
+                    className={[
+                      "px-2.5 py-1 rounded-md text-xs transition-colors border",
+                      authFilter === f.value
+                        ? "bg-foreground text-background border-foreground font-medium"
+                        : "text-muted-foreground border-border/60 hover:text-foreground hover:bg-accent hover:border-border",
+                    ].join(" ")}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* When the key is set, a hint that the list is scoped to it */}
+        {validKey && (
+          <p className="text-xs text-muted-foreground border-b border-border pb-2">
+            Showing the endpoints <span className="font-medium text-foreground">{validKey.name}</span> can use.
+          </p>
+        )}
+
+        {/* Empty state — public visitor with no key entered */}
+        {visibleSections.length === 0 && (
+          <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            Paste your API key above to see the endpoints it can use.
           </div>
-        </div>
+        )}
 
         {/* Sections */}
-        {SECTIONS.map(section => {
-          const eps = section.endpoints.filter(visible);
+        {visibleSections.map(section => {
+          const eps = showReference ? section.endpoints.filter(visible) : section.endpoints;
           if (!eps.length) return null;
           return (
             <div key={section.title} className="space-y-1.5">
