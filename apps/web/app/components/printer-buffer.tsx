@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import JsBarcode from "jsbarcode";
+import { ditherGray, type ImageEffect } from "@printer/core/dither";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -14,9 +15,9 @@ export type PrintEntry =
       size: number;
       invert: boolean;
     }
-  | { id: string; type: "image"; src: string }
-  | { id: string; type: "qr"; text: string }
-  | { id: string; type: "barcode"; data: string; height: number }
+  | { id: string; type: "image"; src: string; effect?: ImageEffect }
+  | { id: string; type: "qr"; text: string; errorLevel?: "L"|"M"|"Q"|"H"; size?: number }
+  | { id: string; type: "barcode"; data: string; height: number; format?: string }
   | { id: string; type: "cut" }
   | { id: string; type: "feed"; lines: number };
 
@@ -34,43 +35,28 @@ export function newId() {
   return String(++_idCounter);
 }
 
-// Floyd-Steinberg dither to 1-bit, returns a data-URL
-function ditherCanvas(img: HTMLImageElement): string {
+function processCanvas(img: HTMLImageElement, effect: ImageEffect = "photo"): string {
   const W = 384;
   const H = Math.round((img.naturalHeight / img.naturalWidth) * W);
   const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
   ctx.drawImage(img, 0, 0, W, H);
   const id = ctx.getImageData(0, 0, W, H);
   const d = id.data;
 
-  // grayscale
   const gray = new Float32Array(W * H);
   for (let i = 0; i < W * H; i++) {
     gray[i] = 0.299 * d[i * 4]! + 0.587 * d[i * 4 + 1]! + 0.114 * d[i * 4 + 2]!;
   }
 
-  // Floyd-Steinberg
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const idx = y * W + x;
-      const old = gray[idx]!;
-      const nw = old < 128 ? 0 : 255;
-      gray[idx] = nw;
-      const err = old - nw;
-      if (x + 1 < W)         gray[idx + 1]!         += err * 7 / 16;
-      if (y + 1 < H && x > 0)      gray[idx + W - 1]! += err * 3 / 16;
-      if (y + 1 < H)          gray[idx + W]!          += err * 5 / 16;
-      if (y + 1 < H && x + 1 < W)  gray[idx + W + 1]! += err * 1 / 16;
-    }
-  }
+  ditherGray(gray, W, H, effect as Parameters<typeof ditherGray>[3]);
 
   for (let i = 0; i < W * H; i++) {
     const v = gray[i]! < 128 ? 0 : 255;
-    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v;
-    d[i * 4 + 3] = 255;
+    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v; d[i * 4 + 3] = 255;
   }
   ctx.putImageData(id, 0, 0);
   return canvas.toDataURL("image/png");
@@ -78,67 +64,65 @@ function ditherCanvas(img: HTMLImageElement): string {
 
 // ─── Entry Renderers ─────────────────────────────────────────────────────────
 
-function TextLine({ entry }: { entry: Extract<PrintEntry, { type: "text" }> }) {
-  const lines = entry.text.split("\n");
-  const colsPerLine = Math.max(1, Math.floor(PRINTER_COLS / entry.size));
+const COLS_PER_SIZE: Record<number, number> = { 1: 32, 2: 17, 3: 10, 4: 8 };
+
+function wrapLine(text: string, cols: number): string[] {
+  if (text.length <= cols) return [text];
+  const out: string[] = [];
+  for (let i = 0; i < text.length; i += cols) out.push(text.slice(i, i + cols));
+  return out;
+}
+
+function TextLine({ entry }: { entry: Extract<PrintEntry, { type: 'text' }> }) {
+  const cols  = COLS_PER_SIZE[entry.size] ?? Math.max(1, Math.floor(PRINTER_COLS / entry.size));
+  const lines = entry.text.split('\n').flatMap(l => wrapLine(l, cols));
 
   const alignClass =
-    entry.align === "center"
-      ? "text-center"
-      : entry.align === "right"
-      ? "text-right"
-      : "text-left";
+    entry.align === 'center' ? 'text-center' :
+    entry.align === 'right'  ? 'text-right'  : 'text-left';
 
   return (
     <div
       className={alignClass}
       style={{
         fontSize: `${entry.size * 0.75}rem`,
-        fontWeight: entry.bold ? "bold" : "normal",
+        fontWeight: entry.bold ? 'bold' : 'normal',
         lineHeight: 1.15,
-        wordBreak: "break-all",
-        maxWidth: `${colsPerLine}ch`,
-        marginLeft: entry.align === "right" ? "auto" : entry.align === "center" ? "auto" : undefined,
-        marginRight: entry.align === "left" ? "auto" : entry.align === "center" ? "auto" : undefined,
+        whiteSpace: 'pre',
         ...(entry.invert
-          ? { background: "#1a1a1a", color: "#f5f0e8", padding: "0 2px" }
+          ? { background: '#1a1a1a', color: '#f5f0e8', padding: '0 2px' }
           : {}),
       }}
     >
       {lines.map((line, i) => (
-        <div key={i}>{line || " "}</div>
+        <div key={i}>{line || ' '}</div>
       ))}
     </div>
   );
 }
 
 function ImageLine({ entry }: { entry: Extract<PrintEntry, { type: "image" }> }) {
-  const [dithered, setDithered] = useState<string | null>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
+  const isSvg = entry.src.startsWith("data:image/svg");
+  const [processed, setProcessed] = useState<string | null>(null);
 
   useEffect(() => {
+    if (isSvg) return;
     const img = new Image();
-    img.onload = () => setDithered(ditherCanvas(img));
+    img.onload = () => setProcessed(processCanvas(img, entry.effect ?? "photo"));
     img.src = entry.src;
-  }, [entry.src]);
+  }, [entry.src, entry.effect, isSvg]);
 
-  if (!dithered) return (
-    <img
-      ref={imgRef}
-      src={entry.src}
-      alt=""
-      className="w-full"
-      style={{ imageRendering: "pixelated", filter: "grayscale(1) contrast(2)" }}
-    />
+  // SVGs (ticket/card previews) render directly — dithering would destroy the vector artwork
+  if (isSvg) return <img src={entry.src} alt="" className="w-full" />;
+
+  if (!processed) return (
+    <img src={entry.src} alt="" className="w-full"
+      style={{ imageRendering: "pixelated", filter: "grayscale(1) contrast(2)" }} />
   );
 
   return (
-    <img
-      src={dithered}
-      alt=""
-      className="w-full"
-      style={{ imageRendering: "pixelated" }}
-    />
+    <img src={processed} alt="" className="w-full"
+      style={{ imageRendering: "pixelated" }} />
   );
 }
 
@@ -148,16 +132,16 @@ function QrLine({ entry }: { entry: Extract<PrintEntry, { type: "qr" }> }) {
   useEffect(() => {
     if (!canvasRef.current) return;
     QRCode.toCanvas(canvasRef.current, entry.text, {
-      width: 256,
-      margin: 1,
-      errorCorrectionLevel: "M",
-      color: { dark: "#1a1a1a", light: "#faf9f7" },
+      width: 192,
+      margin: 2,
+      errorCorrectionLevel: entry.errorLevel ?? "M",
+      color: { dark: "#000000", light: "#ffffff" },
     });
-  }, [entry.text]);
+  }, [entry.text, entry.errorLevel]);
 
   return (
     <div className="flex justify-center">
-      <canvas ref={canvasRef} style={{ imageRendering: "pixelated", width: "192px", height: "192px" }} />
+      <canvas ref={canvasRef} style={{ imageRendering: "pixelated", maxWidth: "100%", height: "auto" }} />
     </div>
   );
 }
@@ -218,33 +202,49 @@ function EntryRenderer({ entry }: { entry: PrintEntry }) {
 // px/ms — matches ~90 mm/s thermal head at 96 dpi (1mm ≈ 3.78px)
 const PRINT_SPEED = 0.34;
 
-function PrinterEntry({ entry, animate }: { entry: PrintEntry; animate: boolean }) {
+function PrinterEntry({ entry, animate, afterCut }: { entry: PrintEntry; animate: boolean; afterCut?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     if (!animate || !ref.current) return;
     const el = ref.current;
-    const h = el.scrollHeight;
-    const ms = Math.max(80, h / PRINT_SPEED);
+    let started = false;
 
     el.style.height = "0px";
     el.style.overflow = "hidden";
 
-    // double rAF: first frame sets h=0, second starts the transition
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      el.style.transition = `height ${ms}ms linear`;
-      el.style.height = `${h}px`;
-      const done = () => {
-        el.style.height = "";
-        el.style.overflow = "";
-        el.style.transition = "";
-      };
-      el.addEventListener("transitionend", done, { once: true });
-    }));
+    function start() {
+      if (started) return;
+      // scrollHeight returns natural content height even when the element itself is height:0
+      const h = el.scrollHeight;
+      if (!h) return;
+      started = true;
+      ro.disconnect();
+      const ms = Math.max(80, h / PRINT_SPEED);
+      requestAnimationFrame(() => {
+        el.style.transition = `height ${ms}ms linear`;
+        el.style.height = `${h}px`;
+        el.addEventListener("transitionend", () => {
+          el.style.height = "";
+          el.style.overflow = "";
+          el.style.transition = "";
+        }, { once: true });
+      });
+    }
+
+    const ro = new ResizeObserver(start);
+    // Observe img elements directly — ResizeObserver fires when they gain dimensions after load
+    const imgs = el.querySelectorAll("img");
+    if (imgs.length) imgs.forEach(img => ro.observe(img));
+    else ro.observe(el);
+
+    requestAnimationFrame(start); // works immediately for text; images fall back to ResizeObserver
+
+    return () => { started = true; ro.disconnect(); };
   }, [animate]);
 
   return (
-    <div ref={ref}>
+    <div ref={ref} className={afterCut ? "pt-1" : undefined}>
       <EntryRenderer entry={entry} />
     </div>
   );
@@ -255,12 +255,16 @@ function PrinterEntry({ entry, animate }: { entry: PrintEntry; animate: boolean 
 interface Props {
   entries: PrintEntry[];
   onClear?: () => void;
+  disableAnimation?: boolean;
+  previewEntries?: PrintEntry[];
 }
 
-export function PrinterBuffer({ entries, onClear }: Props) {
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const knownIds = useRef(new Set<string>());
+export function PrinterBuffer({ entries, onClear, disableAnimation, previewEntries = [] }: Props) {
+  const printedRef = useRef<HTMLDivElement>(null);
+  const knownIds   = useRef(new Set<string>());
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  // Track whether the user has scrolled away from the bottom
+  const stuckToBottom = useRef(true);
 
   useEffect(() => {
     const added = entries.filter(e => !knownIds.current.has(e.id));
@@ -274,72 +278,181 @@ export function PrinterBuffer({ entries, onClear }: Props) {
     }
   }, [entries]);
 
+  function scrollToBottom() {
+    const el = printedRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  // Scroll to bottom whenever a new entry is added (immediate — before animation)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "instant" });
+    if (stuckToBottom.current) scrollToBottom();
   }, [entries.length]);
+
+  const paperRef = useRef<HTMLDivElement>(null);
+
+  // Also keep scrolled to bottom while animations grow content
+  useEffect(() => {
+    const scroll = printedRef.current;
+    const paper  = paperRef.current;
+    if (!scroll || !paper) return;
+    const ro = new ResizeObserver(() => {
+      if (stuckToBottom.current) scroll.scrollTop = scroll.scrollHeight;
+    });
+    ro.observe(paper);
+    return () => ro.disconnect();
+  }, []);
+
+
+  const [showJumpBtn, setShowJumpBtn] = useState(false);
+
+  function handleScroll() {
+    const el = printedRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+    stuckToBottom.current = atBottom;
+    setShowJumpBtn(!atBottom && entries.length > 0);
+  }
+
+  const hasEntries = entries.length > 0;
+  const hasPreview = previewEntries.length > 0;
+
+  const paperStyle    = { width: `calc(${PRINTER_COLS}ch + 12px)`, fontSize: "12px", letterSpacing: "0px", paddingLeft: "6px", paddingRight: "6px", paddingTop: "6px" };
+  const previewStyle  = { ...paperStyle, paddingTop: undefined, paddingBottom: "6px" };
+
+  // palette refs — warm neutrals from the theme
+  const C = {
+    bg:       "oklch(0.900 0.016 80)",   // surface-3
+    toolbar:  "oklch(0.877 0.019 77)",   // surface-4
+    border:   "oklch(0.800 0.018 74)",   // border
+    paper:    "oklch(0.993 0.003 85)",   // surface-0 / input-bg
+    paperTear:"oklch(0.900 0.016 80)",   // matches bg for tear strip
+    preview:  "oklch(0.910 0.055 74)",   // amber-muted tint
+    dimText:  "oklch(0.620 0.018 74)",   // muted-foreground-ish
+    faintText:"oklch(0.750 0.014 74)",   // very faint label
+    ink:      "oklch(0.11  0.006 75)",   // foreground
+  };
 
   return (
     <div
-      className="flex-shrink-0 flex flex-col min-h-0 bg-[#c8bfaf] overflow-hidden border-l border-[#a09080]"
-      style={{ fontFamily: "var(--font-mono)", fontSize: "12px", width: `calc(${PRINTER_COLS}ch + 3rem)` }}
+      className="flex-shrink-0 flex flex-col h-full overflow-hidden border-l"
+      style={{ fontFamily: "var(--font-mono)", fontSize: "12px", width: `calc(${PRINTER_COLS}ch + 3rem)`, background: C.bg, borderColor: C.border }}
     >
       {/* toolbar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-[#b8af9f] border-b border-[#a09080]">
-        <span className="text-[10px] text-[--color-muted] font-mono tracking-wide">
-          POS-58 · {PRINTER_COLS}col
-        </span>
-        {entries.length > 0 && (
-          <button
-            onClick={onClear}
-            className="text-[10px] text-[--color-muted] hover:text-[--color-ink] transition-colors"
-          >
+      <div className="flex items-center justify-between px-3 py-2 flex-shrink-0 border-b"
+        style={{ background: C.toolbar, borderColor: C.border }}>
+        <span className="text-[10px] font-mono tracking-wide [font-variant-numeric:tabular-nums]" style={{ color: C.dimText }}>POS-58 · {PRINTER_COLS}col</span>
+        {hasEntries && (
+          <button onClick={onClear} className="text-[10px] transition-[color,transform] active:scale-[0.96]"
+            style={{ color: C.dimText }}
+            onMouseEnter={e => (e.currentTarget.style.color = C.ink)}
+            onMouseLeave={e => (e.currentTarget.style.color = C.dimText)}>
             clear
           </button>
         )}
       </div>
 
-      {/* paper roll area */}
-      <div className="flex-1 overflow-y-auto flex flex-col items-center py-4 gap-0">
-        {/* spacer so content starts at bottom when short */}
-        <div className="flex-1" />
-
-        {/* paper */}
+      {/* ── Printed section ── */}
+      <div className="flex-[3] min-h-0 flex flex-col border-b relative" style={{ borderColor: C.border }}>
+      <div
+        ref={printedRef}
+        onScroll={handleScroll}
+        className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center pt-4 pb-10"
+      >
         <div
-          className="bg-[#faf9f7] shadow-lg font-mono text-[#1a1a1a] overflow-hidden"
-          style={{
-            width: `${PRINTER_COLS}ch`,
-            fontSize: "12px",
-            letterSpacing: "0px",
-            minHeight: "1px",
-          }}
+          ref={paperRef}
+          className="font-mono overflow-hidden mt-auto flex-shrink-0"
+          style={{ ...paperStyle, background: C.paper, color: C.ink, minHeight: "1px" }}
         >
-          {entries.length === 0 ? (
-            <div className="flex items-center justify-center h-16 text-[#c8bfaf] text-xs">
-              (buffer vacío)
+          {!hasEntries ? (
+            <div className="flex items-center justify-center h-16 text-xs" style={{ color: C.faintText }}>
+              buffer vacío
             </div>
           ) : (
-            <div className="px-0">
-              {entries.map((entry) => (
-                <PrinterEntry key={entry.id} entry={entry} animate={newIds.has(entry.id)} />
+            <div>
+              {entries.map((entry, i) => (
+                <div key={entry.id}>
+                  {i > 0 && entry.type !== "cut" && entries[i - 1]!.type !== "cut" && (
+                    <div style={{ height: "18px", background: C.paper }} />
+                  )}
+                  <PrinterEntry
+                    entry={entry}
+                    animate={!disableAnimation && newIds.has(entry.id)}
+                    afterCut={i > 0 && entries[i - 1]!.type === "cut"}
+                  />
+                </div>
               ))}
             </div>
           )}
-          <div ref={bottomRef} />
         </div>
 
-        {/* tear-off bottom */}
-        {entries.length > 0 && (
+        {hasEntries && (
           <div
-            className="bg-[#faf9f7]"
+            className="flex-shrink-0"
             style={{
-              width: `${PRINTER_COLS}ch`,
+              ...paperStyle,
               height: "8px",
-              backgroundImage:
-                "repeating-linear-gradient(90deg, #faf9f7 0 8px, #c8bfaf 8px 10px)",
+              backgroundImage: `repeating-linear-gradient(90deg, ${C.paper} 0 8px, ${C.bg} 8px 10px)`,
             }}
           />
         )}
       </div>
+
+      {/* Jump-to-bottom button — appears when user has scrolled up */}
+      {showJumpBtn && (
+        <button
+          onClick={() => { stuckToBottom.current = true; setShowJumpBtn(false); scrollToBottom(); }}
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] px-2.5 py-1 rounded-full transition-[color,transform] active:scale-[0.96]"
+          style={{ background: C.toolbar, color: C.dimText, border: `1px solid ${C.border}` }}
+          onMouseEnter={e => (e.currentTarget.style.color = C.ink)}
+          onMouseLeave={e => (e.currentTarget.style.color = C.dimText)}
+        >
+          ↓ latest
+        </button>
+      )}
+      </div>
+
+      {/* ── Preview section ── */}
+      <div className="flex-[2] min-h-0 flex flex-col">
+        {/* Fixed label — never scrolls */}
+        <div className="flex-shrink-0 flex items-center gap-2 px-3 py-3">
+          <div className="flex-1 border-t border-dashed" style={{ borderColor: C.faintText }} />
+          <span className="text-[9px] uppercase tracking-widest font-mono" style={{ color: C.faintText }}>preview</span>
+          <div className="flex-1 border-t border-dashed" style={{ borderColor: C.faintText }} />
+        </div>
+
+        {/* Scrollable preview content */}
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center pb-3">
+          {hasPreview ? (
+            <div
+              className="font-mono overflow-hidden flex-shrink-0"
+              style={{ ...previewStyle, background: C.paper, color: C.ink }}
+            >
+              {previewEntries.map(entry => (
+                <PrinterEntry key={entry.id} entry={entry} animate={false} />
+              ))}
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-xs" style={{ color: C.faintText }}>
+              sin preview
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Inline preview (no scroll, no animation, for accordion use) ─────────────
+
+export function PrintPreview({ entries }: { entries: PrintEntry[] }) {
+  return (
+    <div
+      className="font-mono text-[#1a1a1a] overflow-hidden"
+      style={{ width: `${PRINTER_COLS}ch`, fontSize: "12px", letterSpacing: "0px", background: "#faf9f7" }}
+    >
+      {entries.map(entry => (
+        <PrinterEntry key={entry.id} entry={entry} animate={false} />
+      ))}
     </div>
   );
 }

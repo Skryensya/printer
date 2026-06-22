@@ -17,6 +17,11 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # dotenv environment variable files
 .env
+.env.prod
+agent.env
+
+# printer agent cross-process lock
+.printer.lock*
 .env.development.local
 .env.test.local
 .env.production.local

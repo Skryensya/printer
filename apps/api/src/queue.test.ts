@@ -1,29 +1,35 @@
-import { describe, test, expect, beforeEach } from "bun:test";
-import { initDb, getJob } from "./db";
+import { describe, test, expect, beforeEach, afterEach, jest } from "bun:test";
+import { resetDbForTest, getJob } from "./db";
 import { Queue } from "./queue";
 
 let q: Queue;
 let broadcasts: object[] = [];
 let pushes: string[] = [];
 
-beforeEach(() => {
-  initDb(":memory:");
+beforeEach(async () => {
+  await resetDbForTest();
   broadcasts = [];
   pushes = [];
+  jest.useFakeTimers();
   q = new Queue(
     (msg) => { broadcasts.push(msg); },
-    (job) => { pushes.push(job.id); },
+    (job) => { pushes.push(job.id); return true; },
   );
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 // ─── enqueue ──────────────────────────────────────────────────────────────────
 
 describe("enqueue", () => {
-  test("creates a pending job and notifies watcher + agent", () => {
-    const job = q.enqueue("text", { text: "hi" }, "svc");
+  test("creates a pending job and notifies watcher + agent", async () => {
+    const job = await q.enqueue("text", { text: "hi" }, "svc");
     expect(job.status).toBe("pending");
     expect(broadcasts).toHaveLength(1);
     expect((broadcasts[0] as { event: string }).event).toBe("job:queued");
+    jest.runAllTimers(); // fire the pump
     expect(pushes).toContain(job.id);
   });
 });
@@ -31,22 +37,22 @@ describe("enqueue", () => {
 // ─── onJobStarted / onJobDone ──────────────────────────────────────────────────
 
 describe("onJobStarted", () => {
-  test("sets status to printing and broadcasts", () => {
-    const job = q.enqueue("text", {}, "svc");
+  test("sets status to printing and broadcasts", async () => {
+    const job = await q.enqueue("text", {}, "svc");
     broadcasts = [];
-    q.onJobStarted(job.id);
-    expect(getJob(job.id)?.status).toBe("printing");
+    await q.onJobStarted(job.id);
+    expect((await getJob(job.id))?.status).toBe("printing");
     expect((broadcasts[0] as { event: string }).event).toBe("job:printing");
   });
 });
 
 describe("onJobDone", () => {
-  test("sets status to done and broadcasts", () => {
-    const job = q.enqueue("text", {}, "svc");
-    q.onJobStarted(job.id);
+  test("sets status to done and broadcasts", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    await q.onJobStarted(job.id);
     broadcasts = [];
-    q.onJobDone(job.id);
-    expect(getJob(job.id)?.status).toBe("done");
+    await q.onJobDone(job.id);
+    expect((await getJob(job.id))?.status).toBe("done");
     expect((broadcasts[0] as { event: string }).event).toBe("job:done");
   });
 });
@@ -54,32 +60,33 @@ describe("onJobDone", () => {
 // ─── onJobFailed ──────────────────────────────────────────────────────────────
 
 describe("onJobFailed — printer unavailable", () => {
-  test("keeps job pending (no retry consumed)", () => {
-    const job = q.enqueue("text", {}, "svc");
-    q.onJobStarted(job.id);
+  test("keeps job pending (no retry consumed)", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    await q.onJobStarted(job.id);
     broadcasts = [];
     pushes = [];
 
-    q.onJobFailed(job.id, "printer_unavailable:POS-58 not found");
+    await q.onJobFailed(job.id, "POS-58 not found", "printer_unavailable");
 
-    const updated = getJob(job.id)!;
+    const updated = (await getJob(job.id))!;
     expect(updated.status).toBe("pending");
     expect(updated.retry_count).toBe(0);
     expect((broadcasts[0] as { event: string }).event).toBe("job:queued");
-    expect(pushes).toHaveLength(0);
+    expect(pushes).toHaveLength(0); // pump is stalled — printer not ready
   });
 });
 
 describe("onJobFailed — first real failure", () => {
-  test("resets to pending for one automatic retry", () => {
-    const job = q.enqueue("text", {}, "svc");
-    q.onJobStarted(job.id);
+  test("resets to pending for one automatic retry", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    await q.onJobStarted(job.id);
     pushes = [];
     broadcasts = [];
 
-    q.onJobFailed(job.id, "USB transfer failed: stall");
+    await q.onJobFailed(job.id, "USB transfer failed: stall");
+    jest.runAllTimers(); // fire the pump
 
-    const updated = getJob(job.id)!;
+    const updated = (await getJob(job.id))!;
     expect(updated.status).toBe("pending");
     expect(updated.retry_count).toBe(1);
     expect(pushes).toContain(job.id);
@@ -88,16 +95,17 @@ describe("onJobFailed — first real failure", () => {
 });
 
 describe("onJobFailed — second failure", () => {
-  test("marks job as permanently failed", () => {
-    const job = q.enqueue("text", {}, "svc");
-    q.onJobStarted(job.id);
-    q.onJobFailed(job.id, "USB error");
-    q.onJobStarted(job.id);
+  test("marks job as permanently failed", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    await q.onJobStarted(job.id);
+    await q.onJobFailed(job.id, "USB error");
+    jest.runAllTimers();
+    await q.onJobStarted(job.id);
     broadcasts = [];
 
-    q.onJobFailed(job.id, "USB error again");
+    await q.onJobFailed(job.id, "USB error again");
 
-    const updated = getJob(job.id)!;
+    const updated = (await getJob(job.id))!;
     expect(updated.status).toBe("failed");
     expect(updated.retry_count).toBe(2);
     expect(updated.error).toBe("USB error again");
@@ -108,77 +116,81 @@ describe("onJobFailed — second failure", () => {
 // ─── retryJob ─────────────────────────────────────────────────────────────────
 
 describe("retryJob", () => {
-  test("resets a failed job to pending with fresh retry count", () => {
-    const job = q.enqueue("text", {}, "svc");
-    q.onJobStarted(job.id);
-    q.onJobFailed(job.id, "err");
-    q.onJobStarted(job.id);
-    q.onJobFailed(job.id, "err");
-    expect(getJob(job.id)?.status).toBe("failed");
+  test("resets a failed job to pending with fresh retry count", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    await q.onJobStarted(job.id);
+    await q.onJobFailed(job.id, "err");
+    jest.runAllTimers();
+    await q.onJobStarted(job.id);
+    await q.onJobFailed(job.id, "err");
+    expect((await getJob(job.id))?.status).toBe("failed");
 
     pushes = [];
-    const ok = q.retryJob(job.id);
+    const ok = await q.retryJob(job.id);
+    jest.runAllTimers(); // fire the pump
     expect(ok).toBe(true);
 
-    const updated = getJob(job.id)!;
+    const updated = (await getJob(job.id))!;
     expect(updated.status).toBe("pending");
     expect(updated.retry_count).toBe(0);
     expect(updated.error).toBeNull();
     expect(pushes).toContain(job.id);
   });
 
-  test("returns false for a job that is not in failed state", () => {
-    const job = q.enqueue("text", {}, "svc");
-    expect(q.retryJob(job.id)).toBe(false);
+  test("returns false for a job that is not in failed state", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    expect(await q.retryJob(job.id)).toBe(false);
   });
 });
 
 // ─── cancelJob ────────────────────────────────────────────────────────────────
 
 describe("cancelJob", () => {
-  test("cancels a pending job", () => {
-    const job = q.enqueue("text", {}, "svc");
-    expect(q.cancelJob(job.id)).toBe(true);
-    expect(getJob(job.id)?.status).toBe("cancelled");
+  test("cancels a pending job", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    expect(await q.cancelJob(job.id)).toBe(true);
+    expect((await getJob(job.id))?.status).toBe("cancelled");
     expect((broadcasts.at(-1) as { event: string }).event).toBe("job:cancelled");
   });
 
-  test("cannot cancel a printing job", () => {
-    const job = q.enqueue("text", {}, "svc");
-    q.onJobStarted(job.id);
-    expect(q.cancelJob(job.id)).toBe(false);
-    expect(getJob(job.id)?.status).toBe("printing");
+  test("cannot cancel a printing job", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    await q.onJobStarted(job.id);
+    expect(await q.cancelJob(job.id)).toBe(false);
+    expect((await getJob(job.id))?.status).toBe("printing");
   });
 
-  test("cannot cancel a done job", () => {
-    const job = q.enqueue("text", {}, "svc");
-    q.onJobStarted(job.id);
-    q.onJobDone(job.id);
-    expect(q.cancelJob(job.id)).toBe(false);
+  test("cannot cancel a done job", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    await q.onJobStarted(job.id);
+    await q.onJobDone(job.id);
+    expect(await q.cancelJob(job.id)).toBe(false);
   });
 });
 
 // ─── onAgentConnected ─────────────────────────────────────────────────────────
 
 describe("onAgentConnected", () => {
-  test("pushes all pending jobs to the agent", () => {
-    const a = q.enqueue("text", {}, "svc");
-    const b = q.enqueue("qr", {}, "svc");
+  test("pushes all pending jobs to the agent", async () => {
+    const a = await q.enqueue("text", {}, "svc");
+    const b = await q.enqueue("qr", {}, "svc");
     pushes = [];
 
-    q.onAgentConnected();
+    await q.onAgentConnected();
+    jest.runAllTimers(); // fire the pump for all pending jobs
 
     expect(pushes).toContain(a.id);
     expect(pushes).toContain(b.id);
   });
 
-  test("does not push done or failed jobs", () => {
-    const job = q.enqueue("text", {}, "svc");
-    q.onJobStarted(job.id);
-    q.onJobDone(job.id);
+  test("does not push done or failed jobs", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    await q.onJobStarted(job.id);
+    await q.onJobDone(job.id);
     pushes = [];
 
-    q.onAgentConnected();
+    await q.onAgentConnected();
+    jest.runAllTimers();
     expect(pushes).toHaveLength(0);
   });
 });
@@ -186,21 +198,21 @@ describe("onAgentConnected", () => {
 // ─── onAgentDisconnected ──────────────────────────────────────────────────────
 
 describe("onAgentDisconnected", () => {
-  test("resets printing jobs to pending", () => {
-    const job = q.enqueue("text", {}, "svc");
-    q.onJobStarted(job.id);
-    expect(getJob(job.id)?.status).toBe("printing");
+  test("resets printing jobs to pending", async () => {
+    const job = await q.enqueue("text", {}, "svc");
+    await q.onJobStarted(job.id);
+    expect((await getJob(job.id))?.status).toBe("printing");
 
     broadcasts = [];
-    q.onAgentDisconnected();
+    await q.onAgentDisconnected();
 
-    expect(getJob(job.id)?.status).toBe("pending");
+    expect((await getJob(job.id))?.status).toBe("pending");
     expect((broadcasts[0] as { event: string }).event).toBe("jobs:reset");
   });
 
-  test("broadcasts nothing when no jobs were stuck", () => {
+  test("broadcasts nothing when no jobs were stuck", async () => {
     broadcasts = [];
-    q.onAgentDisconnected();
+    await q.onAgentDisconnected();
     expect(broadcasts).toHaveLength(0);
   });
 });

@@ -1,29 +1,99 @@
-import { createApiKey, listApiKeys, revokeApiKey, deleteApiKey } from "../db";
+import { createApiKey, listApiKeys, revokeApiKey, deleteApiKey, updateApiKey, verifyApiKey } from "../db";
+import { PERMISSION_TYPES } from "../permissions";
 
 function err(msg: string, status = 400): Response {
-  return Response.json({ ok: false, error: msg }, { status });
+  return Response.json({ error: msg }, { status });
 }
 
 export async function listKeysHandler(_req: Request): Promise<Response> {
-  return Response.json({ ok: true, keys: listApiKeys() });
+  return Response.json({ keys: await listApiKeys() });
 }
 
+const VALID_TYPES = new Set<string>(PERMISSION_TYPES);
+
 export async function createKeyHandler(req: Request): Promise<Response> {
-  const body = await req.json().catch(() => null) as { name?: string; expires_at?: number } | null;
+  const body = await req.json().catch(() => null) as {
+    name?: string;
+    expires_at?: number;
+    rate_limit_per_min?: number;
+    rate_limit_per_day?: number;
+    allowed_types?: string[] | null;
+  } | null;
   if (!body?.name?.trim()) return err("body.name is required");
 
-  const { key, raw } = await createApiKey(body.name.trim(), body.expires_at);
-  return Response.json({ ok: true, key, raw }, { status: 201 });
+  if (body.allowed_types != null) {
+    if (!Array.isArray(body.allowed_types) || body.allowed_types.some(t => !VALID_TYPES.has(t))) {
+      return err("allowed_types must be an array of valid job types");
+    }
+  }
+
+  const { key, raw } = await createApiKey(
+    body.name.trim(),
+    body.expires_at,
+    body.rate_limit_per_min,
+    body.rate_limit_per_day,
+    body.allowed_types,
+  );
+  const { allowed_types, ...rest } = key as typeof key & { allowed_types: string | null };
+  return Response.json({
+    key: { ...rest, allowed_types: allowed_types ? JSON.parse(allowed_types) as string[] : null },
+    raw,
+  }, { status: 201 });
+}
+
+export async function updateKeyHandler(req: Request, id: string): Promise<Response> {
+  const body = await req.json().catch(() => null) as {
+    expires_at?: number | null;
+    rate_limit_per_min?: number | null;
+    rate_limit_per_day?: number | null;
+    allowed_types?: string[] | null;
+  } | null;
+  if (!body || typeof body !== "object") return err("Invalid body");
+
+  if ("allowed_types" in body && body.allowed_types != null) {
+    if (!Array.isArray(body.allowed_types) || body.allowed_types.some(t => !VALID_TYPES.has(t))) {
+      return err("allowed_types must be an array of valid job types");
+    }
+  }
+
+  const fields: Parameters<typeof updateApiKey>[1] = {};
+  if ("expires_at"         in body) fields.expires_at         = body.expires_at         ?? null;
+  if ("rate_limit_per_min" in body) fields.rate_limit_per_min = body.rate_limit_per_min ?? null;
+  if ("rate_limit_per_day" in body) fields.rate_limit_per_day = body.rate_limit_per_day ?? null;
+  if ("allowed_types"      in body) fields.allowed_types      = body.allowed_types      ?? null;
+
+  const ok = await updateApiKey(id, fields);
+  if (!ok) return err("Key not found or revoked", 404);
+  return new Response(null, { status: 204 });
 }
 
 export async function revokeKeyHandler(req: Request, id: string): Promise<Response> {
-  const ok = revokeApiKey(id);
+  const ok = await revokeApiKey(id);
   if (!ok) return err("Key not found or already revoked", 404);
-  return Response.json({ ok: true });
+  return new Response(null, { status: 204 });
 }
 
 export async function deleteKeyHandler(_req: Request, id: string): Promise<Response> {
-  const ok = deleteApiKey(id);
+  const ok = await deleteApiKey(id);
   if (!ok) return err("Key not found", 404);
-  return Response.json({ ok: true });
+  return new Response(null, { status: 204 });
+}
+
+// Self-service: returns the current key's own public metadata.
+// No admin required — the key authenticates itself.
+export async function getKeyMeHandler(req: Request): Promise<Response> {
+  const raw =
+    req.headers.get("X-API-Key") ??
+    req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ??
+    "";
+  if (!raw) return err("Unauthorized", 401);
+  const key = await verifyApiKey(raw);
+  if (!key) return err("Unauthorized", 401);
+  return Response.json({
+    name:               key.name,
+    rate_limit_per_min: key.rate_limit_per_min ?? null,
+    rate_limit_per_day: key.rate_limit_per_day ?? null,
+    allowed_types:      key.allowed_types ? JSON.parse(key.allowed_types) as string[] : null,
+    expires_at:         key.expires_at ?? null,
+  });
 }

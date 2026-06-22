@@ -1,0 +1,28 @@
+FROM oven/bun:1
+WORKDIR /app
+
+# Workspace manifests first for layer caching
+COPY package.json bun.lock ./
+COPY packages/core/package.json ./packages/core/
+COPY apps/web/package.json ./apps/web/
+
+RUN bun install --frozen-lockfile
+
+COPY packages/core ./packages/core
+COPY apps/web ./apps/web
+
+# Only the public API URL is baked into the client bundle. The system keys are
+# NOT here — they're server-side runtime env (see below), so they never ship to
+# the browser.
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
+RUN cd apps/web && bun run build
+
+# The build emits a fetch handler (dist/) that imports its deps from node_modules
+# at runtime, so we keep the installed deps and serve via server.ts (Bun.serve).
+# Runtime env (Dokploy): PRINTER_API_URL, PRINTER_API_KEY, ADMIN_API_KEY,
+# SESSION_SECRET, ADMIN_USER, ADMIN_PASSWORD.
+WORKDIR /app/apps/web
+EXPOSE 3000
+CMD ["bun", "server.ts"]

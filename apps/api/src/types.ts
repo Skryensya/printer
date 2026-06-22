@@ -1,4 +1,4 @@
-import type { Priority, Status, BorderStyle } from "@printer/core";
+import type { ImageEffect, CardData } from "@printer/core";
 
 export type Handler = (req: Request) => Response | Promise<Response>;
 
@@ -6,33 +6,27 @@ export interface PrintTextBody {
   text: string;
   align?: "left" | "center" | "right";
   bold?: boolean;
-  size?: number; // 1–8
+  size?: number; // 1–4
   invert?: boolean;
 }
 
-export interface PrintTicketBody {
-  id: string;
-  title: string;
-  priority: Priority;
-  status: Status;
-  assignee?: string;
-  due?: string;
-  tags?: string[];
-  style?: BorderStyle;
-}
+export type PrintTicketBody = CardData;
 
 export interface PrintQrBody {
   text: string;
-  size?: number;
+  size?: number; // 1–16
   errorLevel?: "L" | "M" | "Q" | "H";
 }
 
-export interface PrintBarcodeBody {
-  data: string;
-  height?: number;
+export interface PrintImageBody {
+  image: string;
+  mediaType?: string;
+  effect?: ImageEffect;
 }
 
-export interface PrintImageBody {
-  image: string;    // base64-encoded
-  mediaType?: string;
+export interface PrintTodoBody {
+  // string = item name (≤50 chars); [name, qty] = with right-aligned unit (qty ≤8 chars)
+  items: (string | [name: string, qty: string])[];
+  title?: string;
+  badge?: string;
 }

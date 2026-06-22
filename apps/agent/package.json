@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/index.ts",
+    "dev": "PRINTER_PRIORITY=low bun --watch src/index.ts",
     "start": "bun src/index.ts",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "daemon:start": "bun launchd.ts start",
+    "daemon:stop": "bun launchd.ts stop",
+    "daemon:restart": "bun launchd.ts restart"
   },
   "dependencies": {
     "@printer/core": "workspace:*"

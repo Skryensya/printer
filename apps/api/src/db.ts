@@ -1,31 +1,11 @@
-import { Database } from "bun:sqlite";
-import { join } from "node:path";
+import { sql } from "bun";
 
-const DB_PATH = process.env["DB_PATH"] ?? join(import.meta.dir, "..", "printer.db");
+// ─── Migration ────────────────────────────────────────────────────────────────
 
-let _db: Database | null = null;
-
-export function getDb(): Database {
-  if (_db) return _db;
-  _db = new Database(DB_PATH, { create: true });
-  _db.run("PRAGMA journal_mode = WAL");
-  _db.run("PRAGMA foreign_keys = ON");
-  migrate(_db);
-  return _db;
-}
-
-// Replace the singleton with a fresh in-memory DB — for tests only
-export function initDb(path: string = ":memory:"): Database {
-  if (_db) { try { _db.close(); } catch {} }
-  _db = new Database(path, { create: true });
-  _db.run("PRAGMA foreign_keys = ON");
-  migrate(_db);
-  return _db;
-}
-
-function migrate(db: Database) {
-  db.run(`
+export async function migrate(): Promise<void> {
+  await sql`
     CREATE TABLE IF NOT EXISTS jobs (
+      seq         BIGSERIAL,
       id          TEXT    PRIMARY KEY,
       type        TEXT    NOT NULL,
       payload     TEXT    NOT NULL,
@@ -33,23 +13,42 @@ function migrate(db: Database) {
       source      TEXT    NOT NULL DEFAULT 'unknown',
       retry_count INTEGER NOT NULL DEFAULT 0,
       error       TEXT,
-      created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
-      updated_at  INTEGER NOT NULL DEFAULT (unixepoch())
+      created_at  INTEGER NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::int,
+      updated_at  INTEGER NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::int
     )
-  `);
+  `;
 
-  db.run(`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, created_at)`);
+  await sql`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, created_at)`;
 
-  db.run(`
+  await sql`
     CREATE TABLE IF NOT EXISTS api_keys (
-      id          TEXT    PRIMARY KEY,
-      name        TEXT    NOT NULL UNIQUE,
-      hashed_key  TEXT    NOT NULL UNIQUE,
-      expires_at  INTEGER,
-      revoked_at  INTEGER,
-      created_at  INTEGER NOT NULL DEFAULT (unixepoch())
+      seq                BIGSERIAL,
+      id                 TEXT    PRIMARY KEY,
+      name               TEXT    NOT NULL UNIQUE,
+      hashed_key         TEXT    NOT NULL UNIQUE,
+      expires_at         INTEGER,
+      revoked_at         INTEGER,
+      created_at         INTEGER NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::int,
+      rate_limit_per_min INTEGER,
+      rate_limit_per_day INTEGER,
+      allowed_types      TEXT
     )
-  `);
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS rate_limit_daily (
+      key_id TEXT    NOT NULL,
+      date   TEXT    NOT NULL,
+      count  INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (key_id, date)
+    )
+  `;
+}
+
+// Tests only: ensure schema exists, then wipe all rows for an isolated run.
+export async function resetDbForTest(): Promise<void> {
+  await migrate();
+  await sql`TRUNCATE jobs, api_keys, rate_limit_daily`;
 }
 
 // ─── Job helpers ─────────────────────────────────────────────────────────────
@@ -69,79 +68,87 @@ export interface Job {
   updated_at:  number;
 }
 
-export function enqueueJob(type: JobType, payload: unknown, source: string): Job {
-  const db = getDb();
+export async function enqueueJob(type: JobType, payload: unknown, source: string): Promise<Job> {
   const id = crypto.randomUUID();
-  db.run(
-    `INSERT INTO jobs (id, type, payload, source) VALUES (?, ?, ?, ?)`,
-    [id, type, JSON.stringify(payload), source],
-  );
-  return db.query<Job, [string]>(`SELECT * FROM jobs WHERE id = ?`).get(id)!;
+  const [job] = await sql<Job[]>`
+    INSERT INTO jobs (id, type, payload, source)
+    VALUES (${id}, ${type}, ${JSON.stringify(payload)}, ${source})
+    RETURNING *
+  `;
+  return job!;
 }
 
-export function getJob(id: string): Job | null {
-  return getDb().query<Job, [string]>(`SELECT * FROM jobs WHERE id = ?`).get(id);
+export async function getJob(id: string): Promise<Job | null> {
+  const [job] = await sql<Job[]>`SELECT * FROM jobs WHERE id = ${id}`;
+  return job ?? null;
 }
 
-export function listJobs(status?: JobStatus): Job[] {
-  const db = getDb();
+export async function listJobs(status?: JobStatus): Promise<Job[]> {
   if (status) {
-    return db.query<Job, [string]>(
-      `SELECT * FROM jobs WHERE status = ? ORDER BY created_at ASC`
-    ).all(status);
+    return sql<Job[]>`SELECT * FROM jobs WHERE status = ${status} ORDER BY created_at ASC, seq ASC`;
   }
-  return db.query<Job, []>(`SELECT * FROM jobs ORDER BY created_at DESC`).all();
+  return sql<Job[]>`SELECT * FROM jobs ORDER BY created_at DESC, seq DESC`;
 }
 
-export function listPendingJobs(): Job[] {
+export async function listPendingJobs(): Promise<Job[]> {
   return listJobs("pending");
 }
 
-export function updateJobStatus(
-  id: string,
-  status: JobStatus,
-  error?: string,
-): void {
-  getDb().run(
-    `UPDATE jobs SET status = ?, error = ?, updated_at = unixepoch() WHERE id = ?`,
-    [status, error ?? null, id],
-  );
+export async function deleteJob(id: string): Promise<boolean> {
+  const [job] = await sql<{ status: string }[]>`SELECT status FROM jobs WHERE id = ${id}`;
+  if (!job || job.status === "printing") return false;
+  await sql`DELETE FROM jobs WHERE id = ${id}`;
+  return true;
 }
 
-export function incrementRetry(id: string): number {
-  const db = getDb();
-  db.run(
-    `UPDATE jobs SET retry_count = retry_count + 1, updated_at = unixepoch() WHERE id = ?`,
-    [id],
-  );
-  return (db.query<{ retry_count: number }, [string]>(
-    `SELECT retry_count FROM jobs WHERE id = ?`
-  ).get(id)?.retry_count ?? 0);
+export async function updateJobStatus(id: string, status: JobStatus, error?: string): Promise<void> {
+  await sql`
+    UPDATE jobs
+    SET status = ${status}, error = ${error ?? null}, updated_at = EXTRACT(EPOCH FROM NOW())::int
+    WHERE id = ${id}
+  `;
 }
 
-export function resetJobForRetry(id: string): void {
-  getDb().run(
-    `UPDATE jobs SET status = 'pending', retry_count = 0, error = NULL, updated_at = unixepoch() WHERE id = ?`,
-    [id],
-  );
+export async function incrementRetry(id: string): Promise<number> {
+  const [row] = await sql<{ retry_count: number }[]>`
+    UPDATE jobs
+    SET retry_count = retry_count + 1, updated_at = EXTRACT(EPOCH FROM NOW())::int
+    WHERE id = ${id}
+    RETURNING retry_count
+  `;
+  return row?.retry_count ?? 0;
 }
 
-export function resetStuckJobs(): number {
-  const result = getDb().run(
-    `UPDATE jobs SET status = 'pending', updated_at = unixepoch() WHERE status = 'printing'`
-  );
-  return result.changes;
+export async function resetJobForRetry(id: string): Promise<void> {
+  await sql`
+    UPDATE jobs
+    SET status = 'pending', retry_count = 0, error = NULL, updated_at = EXTRACT(EPOCH FROM NOW())::int
+    WHERE id = ${id}
+  `;
+}
+
+export async function resetStuckJobs(): Promise<number> {
+  const rows = await sql`
+    UPDATE jobs
+    SET status = 'pending', updated_at = EXTRACT(EPOCH FROM NOW())::int
+    WHERE status = 'printing'
+    RETURNING id
+  `;
+  return rows.length;
 }
 
 // ─── API key helpers ──────────────────────────────────────────────────────────
 
 export interface ApiKey {
-  id:         string;
-  name:       string;
-  hashed_key: string;
-  expires_at: number | null;
-  revoked_at: number | null;
-  created_at: number;
+  id:                 string;
+  name:               string;
+  hashed_key:         string;
+  expires_at:         number | null;
+  revoked_at:         number | null;
+  created_at:         number;
+  rate_limit_per_min: number | null;
+  rate_limit_per_day: number | null;
+  allowed_types:      string | null; // raw JSON string, null = all types allowed
 }
 
 async function hashKey(raw: string): Promise<string> {
@@ -149,45 +156,92 @@ async function hashKey(raw: string): Promise<string> {
   return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function createApiKey(name: string, expiresAt?: number): Promise<{ key: ApiKey; raw: string }> {
-  const db = getDb();
-  const id  = crypto.randomUUID();
-  const raw = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
+export async function createApiKey(
+  name: string,
+  expiresAt?: number,
+  rateLimitPerMin?: number | null,
+  rateLimitPerDay?: number | null,
+  allowedTypes?: string[] | null,
+): Promise<{ key: ApiKey; raw: string }> {
+  const id     = crypto.randomUUID();
+  const raw    = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
   const hashed = await hashKey(raw);
-  db.run(
-    `INSERT INTO api_keys (id, name, hashed_key, expires_at) VALUES (?, ?, ?, ?)`,
-    [id, name, hashed, expiresAt ?? null],
-  );
-  const key = db.query<ApiKey, [string]>(`SELECT * FROM api_keys WHERE id = ?`).get(id)!;
-  return { key, raw };
+  const typesJson = allowedTypes != null ? JSON.stringify(allowedTypes) : null;
+  const [key] = await sql<ApiKey[]>`
+    INSERT INTO api_keys (id, name, hashed_key, expires_at, rate_limit_per_min, rate_limit_per_day, allowed_types)
+    VALUES (${id}, ${name}, ${hashed}, ${expiresAt ?? null}, ${rateLimitPerMin ?? null}, ${rateLimitPerDay ?? null}, ${typesJson})
+    RETURNING *
+  `;
+  return { key: key!, raw };
 }
 
 export async function verifyApiKey(raw: string): Promise<ApiKey | null> {
   const hashed = await hashKey(raw);
-  const key = getDb().query<ApiKey, [string]>(
-    `SELECT * FROM api_keys WHERE hashed_key = ?`
-  ).get(hashed);
+  const [key] = await sql<ApiKey[]>`SELECT * FROM api_keys WHERE hashed_key = ${hashed}`;
   if (!key) return null;
   if (key.revoked_at !== null) return null;
   if (key.expires_at !== null && key.expires_at < Math.floor(Date.now() / 1000)) return null;
   return key;
 }
 
-export function listApiKeys(): Omit<ApiKey, "hashed_key">[] {
-  return getDb().query<Omit<ApiKey, "hashed_key">, []>(
-    `SELECT id, name, expires_at, revoked_at, created_at FROM api_keys ORDER BY created_at DESC, rowid DESC`
-  ).all();
+type ApiKeyRow = Omit<ApiKey, "hashed_key">;
+
+export async function listApiKeys(): Promise<(Omit<ApiKeyRow, "allowed_types"> & { allowed_types: string[] | null })[]> {
+  const rows = await sql<ApiKeyRow[]>`
+    SELECT id, name, expires_at, revoked_at, created_at, rate_limit_per_min, rate_limit_per_day, allowed_types
+    FROM api_keys ORDER BY created_at DESC, seq DESC
+  `;
+  return rows.map(r => ({
+    ...r,
+    allowed_types: r.allowed_types ? JSON.parse(r.allowed_types) as string[] : null,
+  }));
 }
 
-export function revokeApiKey(id: string): boolean {
-  const result = getDb().run(
-    `UPDATE api_keys SET revoked_at = unixepoch() WHERE id = ? AND revoked_at IS NULL`,
-    [id],
+export async function revokeApiKey(id: string): Promise<boolean> {
+  const rows = await sql`
+    UPDATE api_keys SET revoked_at = EXTRACT(EPOCH FROM NOW())::int
+    WHERE id = ${id} AND revoked_at IS NULL
+    RETURNING id
+  `;
+  return rows.length > 0;
+}
+
+export async function deleteApiKey(id: string): Promise<boolean> {
+  const rows = await sql`DELETE FROM api_keys WHERE id = ${id} RETURNING id`;
+  return rows.length > 0;
+}
+
+export async function updateApiKey(
+  id: string,
+  fields: {
+    expires_at?:         number | null;
+    rate_limit_per_min?: number | null;
+    rate_limit_per_day?: number | null;
+    allowed_types?:      string[] | null;
+  },
+): Promise<boolean> {
+  // Build SET clause dynamically — column names are hardcoded (safe), values are parameterized.
+  const setClauses: string[] = [];
+  const vals: (number | string | null)[] = [];
+
+  function p(v: number | string | null): string {
+    vals.push(v);
+    return `$${vals.length}`;
+  }
+
+  if ("expires_at"         in fields) setClauses.push(`expires_at = ${p(fields.expires_at ?? null)}`);
+  if ("rate_limit_per_min" in fields) setClauses.push(`rate_limit_per_min = ${p(fields.rate_limit_per_min ?? null)}`);
+  if ("rate_limit_per_day" in fields) setClauses.push(`rate_limit_per_day = ${p(fields.rate_limit_per_day ?? null)}`);
+  if ("allowed_types"      in fields) {
+    setClauses.push(`allowed_types = ${p(fields.allowed_types != null ? JSON.stringify(fields.allowed_types) : null)}`);
+  }
+
+  if (setClauses.length === 0) return false;
+
+  vals.push(id);
+  const rows = await sql.unsafe(
+    `UPDATE api_keys SET ${setClauses.join(", ")} WHERE id = $${vals.length} AND revoked_at IS NULL RETURNING id`,
+    vals,
   );
-  return result.changes > 0;
-}
-
-export function deleteApiKey(id: string): boolean {
-  const result = getDb().run(`DELETE FROM api_keys WHERE id = ?`, [id]);
-  return result.changes > 0;
+  return rows.length > 0;
 }

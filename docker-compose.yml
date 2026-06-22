@@ -1,0 +1,43 @@
+# Production stack — Postgres + API, fully self-contained.
+# Postgres is NOT published to the host (only the api talks to it over the
+# compose network), so this never collides with a local/dev Postgres.
+#
+#   cp .env.prod.example .env.prod   # fill in secrets
+#   docker compose up -d --build
+#
+name: printer-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: printer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: printer
+    volumes:
+      - printer-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U printer -d printer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      DATABASE_URL: postgres://printer:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}@postgres:5432/printer
+      ADMIN_API_KEY: ${ADMIN_API_KEY:?set ADMIN_API_KEY in .env.prod}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      PORT: 5810
+    ports:
+      - "5810:5810"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  printer-pgdata:

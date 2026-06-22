@@ -11,6 +11,12 @@ const ENDPOINT_IN  = 0x81;
 export class Printer {
   private device!: USBDevice;
 
+  static async isPresent(): Promise<boolean> {
+    const webusb = new WebUSB({ allowAllDevices: true });
+    const devices = await webusb.getDevices();
+    return devices.some(d => d.vendorId === VENDOR_ID && d.productId === PRODUCT_ID);
+  }
+
   async connect() {
     const webusb = new WebUSB({ allowAllDevices: true });
     const devices = await webusb.getDevices();

@@ -1,0 +1,22 @@
+FROM oven/bun:1
+WORKDIR /app
+
+# libusb runtime: @printer/core re-exports Printer (node-usb), which the API loads
+# transitively even though it never drives the printer itself.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends libusb-1.0-0 \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install workspace deps (root + api + core manifests first for layer caching)
+COPY package.json bun.lock ./
+COPY packages/core/package.json ./packages/core/
+COPY apps/api/package.json ./apps/api/
+
+RUN bun install --frozen-lockfile
+
+COPY packages/core ./packages/core
+COPY apps/api ./apps/api
+
+# DATABASE_URL, ADMIN_API_KEY, CORS_ORIGIN, PORT provided at runtime (Dokploy env)
+EXPOSE 5810
+CMD ["bun", "apps/api/src/index.ts"]

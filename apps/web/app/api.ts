@@ -1,37 +1,51 @@
-const BASE       = import.meta.env["VITE_API_URL"]       ?? "http://localhost:3001";
-const KEY        = import.meta.env["VITE_API_KEY"]       ?? "";
-const ADMIN_KEY  = import.meta.env["VITE_ADMIN_API_KEY"] ?? "";
+// Client API. No system keys live here — every call that needs the admin or
+// service key goes through the server-side proxy (app/server/printer.ts), so the
+// keys stay on the web server and never reach the browser bundle.
+import { apiFn, watchTokenFn, type ProxyResult } from "./server/printer";
 
-function headers(admin = false) {
-  return { "Content-Type": "application/json", "X-API-Key": admin ? ADMIN_KEY : KEY };
+// VITE_API_URL is a public URL (not a secret) — only used for the docs page,
+// where the user pastes their OWN key (not a system key).
+const BASE = import.meta.env["VITE_API_URL"] ?? "http://localhost:5801";
+
+// Typed wrapper around the server-fn proxy (the RPC stub returns `unknown`).
+function call(data: { method: string; path: string; body?: unknown; admin?: boolean }): Promise<ProxyResult> {
+  return apiFn({ data }) as Promise<ProxyResult>;
+}
+
+function parseBody<T>(r: ProxyResult): T {
+  return (r.body ? JSON.parse(r.body) : null) as T;
+}
+
+function errorOf(r: ProxyResult): string {
+  const e = parseBody<{ error?: string } | null>(r)?.error;
+  return e ?? `HTTP ${r.status}`;
 }
 
 async function post(path: string, body: unknown, admin = false): Promise<void> {
-  const res  = await fetch(`${BASE}${path}`, { method: "POST", headers: headers(admin), body: JSON.stringify(body) });
-  const json = await res.json() as { ok: boolean; error?: string };
-  if (!json.ok) throw new Error(json.error ?? "Unknown error");
+  const r = await call({ method: "POST", path, body, admin });
+  if (!r.ok) throw new Error(errorOf(r));
 }
 
 async function get<T>(path: string, admin = false): Promise<T> {
-  const res  = await fetch(`${BASE}${path}`, { headers: headers(admin) });
-  const json = await res.json() as { ok: boolean; error?: string } & T;
-  if (!json.ok) throw new Error(json.error ?? "Unknown error");
-  return json;
+  const r = await call({ method: "GET", path, admin });
+  if (!r.ok) throw new Error(errorOf(r));
+  return parseBody<T>(r);
 }
 
 async function del(path: string, admin = false): Promise<void> {
-  const res  = await fetch(`${BASE}${path}`, { method: "DELETE", headers: headers(admin) });
-  const json = await res.json() as { ok: boolean; error?: string };
-  if (!json.ok) throw new Error(json.error ?? "Unknown error");
+  const r = await call({ method: "DELETE", path, admin });
+  if (!r.ok) throw new Error(errorOf(r));
 }
 
 // ─── Agent status ─────────────────────────────────────────────────────────────
 
-export async function getAgentStatus(): Promise<boolean | null> {
+export type AgentStatus = "offline" | "printer_offline" | "ready";
+
+export async function getAgentStatus(): Promise<AgentStatus | null> {
   try {
-    const res  = await fetch(`${BASE}/api/v1/agent`);
-    const json = await res.json() as { ok: boolean; connected: boolean };
-    return json.ok ? json.connected : null;
+    const r = await call({ method: "GET", path: "/api/v1/agent", admin: true });
+    if (!r.ok) return null;
+    return parseBody<{ status: AgentStatus }>(r).status;
   } catch {
     return null;
   }
@@ -47,31 +61,34 @@ export function printText(body: {
   invert?: boolean;
 }) { return post("/api/v1/print/text", body); }
 
-export function printTicket(body: {
-  id: string;
-  title: string;
-  priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  status: "TODO" | "IN PROGRESS" | "DONE" | "BLOCKED";
-  assignee?: string;
-  due?: string;
-  tags?: string[];
-  style?: "ascii" | "thin" | "double" | "block" | "shade" | "stars";
-}) { return post("/api/v1/print/ticket", body); }
+export type ImageEffect = "photo" | "invert";
 
-export function printQr(body: {
-  text: string;
-  size?: number;
-  errorLevel?: "L" | "M" | "Q" | "H";
-}) { return post("/api/v1/print/qr", body); }
+export interface CardData {
+  title?: string;
+  badge?: string;
+  from?:  string;
+  label?: string;
+  date?:  string;
+  rows?:  [string, string, string?][];
+  qr?:    string;
+}
 
-export function printBarcode(body: {
-  data: string;
-  height?: number;
-}) { return post("/api/v1/print/barcode", body); }
+export function printTicket(card: CardData) { return post("/api/v1/print/ticket", card); }
+
+export function printTodo(body: { items: (string | [string, string])[]; title?: string; badge?: string }) {
+  return post("/api/v1/print/todo", body);
+}
+
+// Simple message card — from is locked to the key name on the server unless
+// the key also holds the message_custom permission, in which case body.from is used.
+export function printMessage(body: { message: string; from?: string }) {
+  return post("/api/v1/print/message", body);
+}
 
 export function printImage(body: {
   image: string;
   mediaType?: string;
+  effect?: ImageEffect;
 }) { return post("/api/v1/print/image", body); }
 
 export function printBorders() { return post("/api/v1/print/borders", {}); }
@@ -80,7 +97,6 @@ export function printTest()    { return post("/api/v1/print/test", {}); }
 // ─── Job types ────────────────────────────────────────────────────────────────
 
 export type JobStatus = "pending" | "printing" | "done" | "failed" | "cancelled";
-export type JobType   = "text" | "ticket" | "qr" | "barcode" | "image" | "borders" | "test";
 
 export interface PrintJob {
   id:          string;
@@ -109,15 +125,38 @@ export async function getJob(id: string): Promise<PrintJob> {
 
 export function retryJob(id: string)  { return post(`/api/v1/jobs/${id}/retry`, {}, true); }
 export function cancelJob(id: string) { return post(`/api/v1/jobs/${id}/cancel`, {}, true); }
+export function deleteJob(id: string) { return del(`/api/v1/jobs/${id}`, true); }
+
+export async function reprintJob(id: string): Promise<{ id: string }> {
+  const r = await call({ method: "POST", path: `/api/v1/jobs/${id}/reprint`, body: {}, admin: true });
+  if (!r.ok) throw new Error(errorOf(r));
+  return parseBody<{ id: string }>(r);
+}
 
 // ─── Admin: API keys ──────────────────────────────────────────────────────────
 
+// Public permission types shown in the key management UI.
+// message_custom is a superset of message — a key with message_custom can also
+// override the "from" field; without it, "from" is always the key name.
+export const ALL_PERMISSION_TYPES = [
+  "text", "message", "message_custom", "ticket", "todo", "qr", "image",
+] as const;
+export type PermissionType = typeof ALL_PERMISSION_TYPES[number];
+
+// Actual job queue types — includes barcode for historical entries that may
+// already exist in the queue, even though the barcode endpoint is removed.
+export const ALL_JOB_TYPES = ["text","ticket","qr","barcode","image","borders","test"] as const;
+export type JobType = typeof ALL_JOB_TYPES[number];
+
 export interface ApiKey {
-  id:         string;
-  name:       string;
-  expires_at: number | null;
-  revoked_at: number | null;
-  created_at: number;
+  id:                 string;
+  name:               string;
+  expires_at:         number | null;
+  revoked_at:         number | null;
+  created_at:         number;
+  rate_limit_per_min: number | null;
+  rate_limit_per_day: number | null;
+  allowed_types:      string[] | null;  // null = all types allowed
 }
 
 export async function listKeys(): Promise<ApiKey[]> {
@@ -125,23 +164,60 @@ export async function listKeys(): Promise<ApiKey[]> {
   return res.keys;
 }
 
-export async function createKey(name: string, expires_at?: number): Promise<{ key: ApiKey; raw: string }> {
-  const res = await fetch(`${BASE}/api/v1/keys`, {
-    method: "POST",
-    headers: headers(true),
-    body: JSON.stringify({ name, expires_at }),
-  });
-  const json = await res.json() as { ok: boolean; key: ApiKey; raw: string; error?: string };
-  if (!json.ok) throw new Error(json.error ?? "Unknown error");
-  return { key: json.key, raw: json.raw };
+export async function createKey(params: {
+  name: string;
+  expires_at?: number;
+  rate_limit_per_min?: number | null;
+  rate_limit_per_day?: number | null;
+  allowed_types?: string[] | null;
+}): Promise<{ key: ApiKey; raw: string }> {
+  const r = await call({ method: "POST", path: "/api/v1/keys", body: params, admin: true });
+  if (!r.ok) throw new Error(errorOf(r));
+  return parseBody<{ key: ApiKey; raw: string }>(r);
+}
+
+export async function updateKey(id: string, fields: {
+  expires_at?: number | null;
+  rate_limit_per_min?: number | null;
+  rate_limit_per_day?: number | null;
+  allowed_types?: string[] | null;
+}): Promise<void> {
+  const r = await call({ method: "PATCH", path: `/api/v1/keys/${id}`, body: fields, admin: true });
+  if (!r.ok) throw new Error(errorOf(r));
 }
 
 export function revokeKey(id: string) { return post(`/api/v1/keys/${id}/revoke`, {}, true); }
 export function deleteKey(id: string) { return del(`/api/v1/keys/${id}`, true); }
 
+// ─── Key self-service ─────────────────────────────────────────────────────────
+
+export interface KeyInfo {
+  name:               string;
+  rate_limit_per_min: number | null;
+  rate_limit_per_day: number | null;
+  allowed_types:      string[] | null;
+  expires_at:         number | null;
+}
+
+// Fetch the calling key's own metadata. The user pastes their OWN key here
+// (docs page) — it's not a system secret, so this calls the API directly.
+export async function getMyKey(apiKey: string): Promise<KeyInfo | null> {
+  try {
+    const res = await fetch(`${BASE}/api/v1/keys/me`, {
+      headers: { "X-API-Key": apiKey },
+    });
+    if (!res.ok) return null;
+    return res.json() as Promise<KeyInfo>;
+  } catch {
+    return null;
+  }
+}
+
 // ─── WebSocket URL ────────────────────────────────────────────────────────────
 
-export function watchWsUrl(): string {
-  const ws = BASE.replace(/^http/, "ws");
-  return `${ws}/ws/watch?key=${encodeURIComponent(ADMIN_KEY)}`;
+// Returns a watch WebSocket URL carrying a short-lived signed token (no admin
+// key). Null if the user isn't authenticated.
+export async function watchWsUrl(): Promise<string | null> {
+  const { url } = await watchTokenFn();
+  return url;
 }

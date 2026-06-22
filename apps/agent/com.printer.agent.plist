@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd LaunchDaemon for the printer agent (macOS).
+
+  Managed by `bun run daemon:{start,stop,restart}` from apps/agent (see launchd.ts).
+  Secrets live in /usr/local/etc/printer-agent.env (chmod 600, root-only), copied
+  from apps/agent/agent.env on start, and loaded by `bun --env-file` — never in this plist.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.printer.agent</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/allisonpena/.bun/bin/bun</string>
+    <string>--env-file=/usr/local/etc/printer-agent.env</string>
+    <string>apps/agent/src/index.ts</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/allisonpena/dev/allison/printer</string>
+
+  <!-- Start at boot (no login required) -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Restart whenever it exits, for any reason -->
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Don't hammer-restart on a crash loop; wait 10s between relaunches -->
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/var/log/printer-agent.log</string>
+  <key>StandardErrorPath</key>
+  <string>/var/log/printer-agent.log</string>
+</dict>
+</plist>

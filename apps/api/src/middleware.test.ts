@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { initDb, createApiKey } from "./db";
+import { resetDbForTest, createApiKey } from "./db";
 import { withServiceAuth, withAdminAuth } from "./middleware/auth";
 
 const ok = () => new Response("ok", { status: 200 });
@@ -13,8 +13,8 @@ function makeReq(key?: string, via: "header" | "bearer" = "header"): Request {
   return new Request("http://localhost/", { headers });
 }
 
-beforeEach(() => {
-  initDb(":memory:");
+beforeEach(async () => {
+  await resetDbForTest();
   process.env["ADMIN_API_KEY"] = "test-admin-key";
 });
 
@@ -24,7 +24,7 @@ describe("withServiceAuth", () => {
   test("passes valid key and forwards source name", async () => {
     const { raw } = await createApiKey("my-service");
     let capturedSource = "";
-    const handler = withServiceAuth((_req, source) => {
+    const handler = withServiceAuth(null, (_req, source) => {
       capturedSource = source;
       return ok();
     });
@@ -34,14 +34,14 @@ describe("withServiceAuth", () => {
   });
 
   test("rejects missing key with 401", async () => {
-    const handler = withServiceAuth(ok);
+    const handler = withServiceAuth(null, ok);
     const res = await handler(makeReq());
     expect(res.status).toBe(401);
   });
 
   test("rejects wrong key with 401", async () => {
     await createApiKey("svc");
-    const handler = withServiceAuth(ok);
+    const handler = withServiceAuth(null, ok);
     const res = await handler(makeReq("not-the-right-key"));
     expect(res.status).toBe(401);
   });
@@ -49,8 +49,8 @@ describe("withServiceAuth", () => {
   test("rejects revoked key", async () => {
     const { key, raw } = await createApiKey("svc");
     const { revokeApiKey } = await import("./db");
-    revokeApiKey(key.id);
-    const handler = withServiceAuth(ok);
+    await revokeApiKey(key.id);
+    const handler = withServiceAuth(null, ok);
     const res = await handler(makeReq(raw));
     expect(res.status).toBe(401);
   });
@@ -58,14 +58,14 @@ describe("withServiceAuth", () => {
   test("rejects expired key", async () => {
     const past = Math.floor(Date.now() / 1000) - 1;
     const { raw } = await createApiKey("svc", past);
-    const handler = withServiceAuth(ok);
+    const handler = withServiceAuth(null, ok);
     const res = await handler(makeReq(raw));
     expect(res.status).toBe(401);
   });
 
   test("accepts key via Authorization: Bearer header", async () => {
     const { raw } = await createApiKey("svc");
-    const handler = withServiceAuth(ok);
+    const handler = withServiceAuth(null, ok);
     const res = await handler(makeReq(raw, "bearer"));
     expect(res.status).toBe(200);
   });

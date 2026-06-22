@@ -3,8 +3,13 @@
   "private": true,
   "packageManager": "pnpm@10.12.1",
   "scripts": {
-    "predev": "lsof -ti:3000,3002 | xargs kill -9 2>/dev/null; true",
-    "dev": "turbo dev",
+    "predev": "lsof -ti:5800,5801,5803 | xargs kill -9 2>/dev/null; true",
+    "dev": "bun run db:up && turbo dev",
+    "db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
+    "db:down": "docker compose -f docker-compose.dev.yml down",
+    "daemon:start": "bun run --filter '@printer/agent' daemon:start",
+    "daemon:stop": "bun run --filter '@printer/agent' daemon:stop",
+    "daemon:restart": "bun run --filter '@printer/agent' daemon:restart",
     "build": "turbo build",
     "check-types": "turbo check-types",
     "lint": "turbo lint"

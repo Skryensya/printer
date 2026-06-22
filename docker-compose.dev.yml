@@ -1,0 +1,30 @@
+# Dev infra only — Postgres for local development.
+# The app itself runs natively: `bun dev` (turbo) as usual.
+# Published on 5802 (a project-specific port) so it never collides with a system
+# Postgres on 5432 or another project's dev DB on the obvious 5433.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   bun dev
+#
+name: printer-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: printer
+      POSTGRES_PASSWORD: printer
+      POSTGRES_DB: printer
+    ports:
+      - "5802:5432"
+    volumes:
+      - printer-dev-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U printer -d printer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  printer-dev-pgdata:

@@ -1,23 +1,26 @@
 import { healthHandler } from "./handlers/health";
 import {
-  printTextHandler, printTicketHandler, printQrHandler,
-  printBarcodeHandler, printImageHandler, printBordersHandler, printTestHandler,
+  printTextHandler, printTicketHandler, printTodoHandler,
+  printMessageHandler, printImageHandler, printBordersHandler, printTestHandler,
 } from "./handlers/print";
 import {
-  listKeysHandler, createKeyHandler, revokeKeyHandler, deleteKeyHandler,
+  listKeysHandler, createKeyHandler, updateKeyHandler, revokeKeyHandler, deleteKeyHandler, getKeyMeHandler,
 } from "./handlers/keys";
 import {
-  getJobHandler, listJobsHandler, retryJobHandler, cancelJobHandler,
+  getJobHandler, listJobsHandler, retryJobHandler, cancelJobHandler, deleteJobHandler, reprintJobHandler,
 } from "./handlers/jobs";
-import { withServiceAuth, withAdminAuth } from "./middleware/auth";
+import { withServiceAuth, withAdminAuth, withMessageAuth, withJobAuth } from "./middleware/auth";
 import { withCors } from "./middleware/cors";
-import { broadcastToWatchers, pushJobToAgent, startPingInterval, websocketHandlers, isAgentConnected } from "./websocket";
+import { broadcastToWatchers, pushJobToAgent, startPingInterval, websocketHandlers, getAgentStatus } from "./websocket";
 import { initQueue } from "./queue";
-import { verifyApiKey, resetStuckJobs } from "./db";
+import { verifyApiKey, resetStuckJobs, migrate } from "./db";
+import { verifyWatchToken } from "./watch-token";
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
-const stuck = resetStuckJobs();
+await migrate();
+
+const stuck = await resetStuckJobs();
 if (stuck > 0) console.log(`  Reset ${stuck} stuck job(s) to pending`);
 
 initQueue({ broadcast: broadcastToWatchers, pushToAgent: pushJobToAgent });
@@ -34,46 +37,56 @@ async function router(req: Request): Promise<Response> {
   if (path === "/ws/agent" && req.headers.get("upgrade") === "websocket") {
     const raw = req.headers.get("X-API-Key") ?? url.searchParams.get("key") ?? "";
     const key = await verifyApiKey(raw);
-    if (!key) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    if (!key) return Response.json({ error: "Unauthorized" }, { status: 401 });
     return server.upgrade(req, { data: { role: "agent" } })
       ? new Response()
       : new Response("WebSocket upgrade failed", { status: 500 });
   }
 
   if (path === "/ws/watch" && req.headers.get("upgrade") === "websocket") {
-    const adminKey = process.env["ADMIN_API_KEY"] ?? "";
-    const raw = req.headers.get("X-API-Key") ?? url.searchParams.get("key") ?? "";
-    if (!adminKey || raw !== adminKey) {
-      return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    const adminKey  = process.env["ADMIN_API_KEY"] ?? "";
+    const headerKey = req.headers.get("X-API-Key") ?? "";
+    const token     = url.searchParams.get("token") ?? "";
+    // Browser watchers present a short-lived signed token (no admin key in the
+    // URL); server-side tools may still use the admin key via header.
+    const authorized =
+      !!adminKey &&
+      ((headerKey !== "" && headerKey === adminKey) || verifyWatchToken(token, adminKey));
+    if (!authorized) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
     return server.upgrade(req, { data: { role: "watcher" } })
       ? new Response()
       : new Response("WebSocket upgrade failed", { status: 500 });
   }
 
-  // ── Health (public) ─────────────────────────────────────────────────────────
+  // ── Health (admin) ──────────────────────────────────────────────────────────
   if (method === "GET" && path === "/health") {
     return withCors(healthHandler)(req);
   }
 
-  // ── Agent status (public) ───────────────────────────────────────────────────
+  // ── Agent status (admin) ────────────────────────────────────────────────────
   if (method === "GET" && path === "/api/v1/agent") {
-    return withCors(() => Response.json({ ok: true, connected: isAgentConnected() }))(req);
+    return withCors(withAdminAuth(() => Response.json({ status: getAgentStatus() })))(req);
   }
 
-  // ── Print endpoints (service auth) ─────────────────────────────────────────
+  // ── Print endpoints (service auth + per-key type allowlist) ───────────────
   if (method === "POST") {
-    const printRoutes: Record<string, typeof printTextHandler> = {
-      "/api/v1/print/text":    printTextHandler,
-      "/api/v1/print/ticket":  printTicketHandler,
-      "/api/v1/print/qr":      printQrHandler,
-      "/api/v1/print/barcode": printBarcodeHandler,
-      "/api/v1/print/image":   printImageHandler,
-      "/api/v1/print/borders": printBordersHandler,
-      "/api/v1/print/test":    printTestHandler,
+    // Message uses its own auth wrapper (checks "message" OR "message_custom")
+    if (path === "/api/v1/print/message") {
+      return withCors(withMessageAuth(printMessageHandler))(req);
+    }
+
+    const printRoutes: Record<string, { type: string; fn: typeof printTextHandler }> = {
+      "/api/v1/print/text":    { type: "text",    fn: printTextHandler    },
+      "/api/v1/print/ticket":  { type: "ticket",  fn: printTicketHandler  },
+      "/api/v1/print/todo":    { type: "todo",    fn: printTodoHandler    },
+      "/api/v1/print/image":   { type: "image",   fn: printImageHandler   },
+      "/api/v1/print/borders": { type: "borders", fn: printBordersHandler },
+      "/api/v1/print/test":    { type: "test",    fn: printTestHandler    },
     };
-    const handler = printRoutes[path];
-    if (handler) return withCors(withServiceAuth(handler))(req);
+    const route = printRoutes[path];
+    if (route) return withCors(withServiceAuth(route.type, route.fn))(req);
   }
 
   // ── Jobs (service auth for GET single, admin for rest) ─────────────────────
@@ -81,18 +94,22 @@ async function router(req: Request): Promise<Response> {
     return withCors(withAdminAuth(listJobsHandler))(req);
   }
 
-  const jobActionMatch = path.match(/^\/api\/v1\/jobs\/([^/]+)\/(retry|cancel)$/);
+  const jobActionMatch = path.match(/^\/api\/v1\/jobs\/([^/]+)\/(retry|cancel|reprint)$/);
   if (jobActionMatch && method === "POST") {
     const id     = jobActionMatch[1]!;
     const action = jobActionMatch[2]!;
-    const fn = action === "retry" ? retryJobHandler : cancelJobHandler;
+    const fn = action === "retry" ? retryJobHandler : action === "reprint" ? reprintJobHandler : cancelJobHandler;
     return withCors(withAdminAuth((req) => fn(req, id)))(req);
   }
 
   const jobMatch = path.match(/^\/api\/v1\/jobs\/([^/]+)$/);
+  if (jobMatch && method === "DELETE") {
+    const id = jobMatch[1]!;
+    return withCors(withAdminAuth((req) => deleteJobHandler(req, id)))(req);
+  }
   if (jobMatch && method === "GET") {
     const id = jobMatch[1]!;
-    return withCors(withServiceAuth((req) => getJobHandler(req, id)))(req);
+    return withCors(withJobAuth((req, source) => getJobHandler(req, id, source)))(req);
   }
 
   // ── API key management (admin only) ─────────────────────────────────────────
@@ -101,9 +118,15 @@ async function router(req: Request): Promise<Response> {
     if (method === "POST") return withCors(withAdminAuth(createKeyHandler))(req);
   }
 
+  // /keys/me must be registered before /keys/:id to prevent "me" matching as an id
+  if (method === "GET" && path === "/api/v1/keys/me") {
+    return withCors(getKeyMeHandler)(req);
+  }
+
   const keyMatch = path.match(/^\/api\/v1\/keys\/([^/]+)$/);
   if (keyMatch) {
     const id = keyMatch[1]!;
+    if (method === "PATCH")  return withCors(withAdminAuth((req) => updateKeyHandler(req, id)))(req);
     if (method === "DELETE") return withCors(withAdminAuth((req) => deleteKeyHandler(req, id)))(req);
   }
 
@@ -113,7 +136,7 @@ async function router(req: Request): Promise<Response> {
     return withCors(withAdminAuth((req) => revokeKeyHandler(req, id)))(req);
   }
 
-  return withCors(() => Response.json({ ok: false, error: "Not found" }, { status: 404 }))(req);
+  return withCors(() => Response.json({ error: "Not found" }, { status: 404 }))(req);
 }
 
 // ─── Server ──────────────────────────────────────────────────────────────────

@@ -1,9 +1,9 @@
 // Run once to create initial service keys: bun src/seed.ts
-import { initDb, createApiKey, listApiKeys } from "./db";
+import { migrate, createApiKey, listApiKeys } from "./db";
 
-initDb();
+await migrate();
 
-const existing = listApiKeys().map(k => k.name);
+const existing = (await listApiKeys()).map(k => k.name);
 
 const keys: Record<string, string> = {};
 
