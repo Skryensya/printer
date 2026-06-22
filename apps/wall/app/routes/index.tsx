@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Printer, Loader2 } from "lucide-react";
-import { fetchWallFn, submitMessageFn, type WallSnapshot, type WallItem } from "~/api";
+import { Printer, Loader2, Sun, Moon } from "lucide-react";
+import { fetchWallFn, submitMessageFn, type WallSnapshot } from "~/api";
 import { getRecaptchaToken } from "~/lib/recaptcha";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -22,12 +22,22 @@ function formatCooldown(ms: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-const STATUS_META: Record<WallItem["status"], { label: string; dot: string }> = {
-  pending:  { label: "en cola",     dot: "bg-[var(--color-amber)]" },
-  printing: { label: "imprimiendo", dot: "bg-[var(--color-green)] animate-pulse" },
-  printed:  { label: "impreso",     dot: "bg-[var(--color-base-300)]" },
-  failed:   { label: "falló",       dot: "bg-[var(--color-red)]" },
-};
+function ThemeToggle() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => { setDark(document.documentElement.classList.contains("dark")); }, []);
+  function toggle() {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    try { localStorage.setItem("wall:theme", next ? "dark" : "light"); } catch {}
+  }
+  return (
+    <button onClick={toggle} aria-label="Cambiar tema"
+      className="w-9 h-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-accent transition-[color,background-color,transform] active:scale-[0.96]">
+      {dark ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
+  );
+}
 
 function WallPage() {
   const initial = Route.useLoaderData() as WallSnapshot;
@@ -41,6 +51,11 @@ function WallPage() {
   const [cooldown, setCooldown] = useState(initial.cooldownRemaining);
 
   const mountedAt = useRef(Date.now());
+
+  // Remember the visitor's name across visits.
+  useEffect(() => {
+    try { const w = localStorage.getItem("wall:who"); if (w) setFrom(w); } catch {}
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -85,8 +100,9 @@ function WallPage() {
         },
       });
       if (result.ok) {
+        // Keep the name for next time; only clear the message.
+        try { if (from.trim()) localStorage.setItem("wall:who", from.trim()); } catch {}
         setMessage("");
-        setFrom("");
         setCooldown(result.cooldownRemaining);
         await refresh();
       } else {
@@ -106,16 +122,19 @@ function WallPage() {
 
         {/* Header */}
         <header className="space-y-4">
-          <div className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
-            <Printer size={15} />
-            <span>la impresora de Allison</span>
+          <div className="flex items-center justify-between">
+            <div className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
+              <Printer size={15} />
+              <span>la impresora de Allison</span>
+            </div>
+            <ThemeToggle />
           </div>
           <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] tracking-tight">
             Mándame algo.
           </h1>
           <p className="text-[15px] leading-relaxed text-muted-foreground max-w-md">
-            Escríbelo aquí y sale impreso en papel, en la impresora que tengo en
-            mi escritorio. Lo voy a leer.
+            Escríbelo aquí y, cuando le des a imprimir, sale en papel en la
+            impresora que tengo en mi escritorio. Lo voy a leer.
           </p>
         </header>
 
@@ -166,41 +185,29 @@ function WallPage() {
           </div>
         </form>
 
-        {/* Wall */}
-        <section className="space-y-3">
-          <div className="flex items-center gap-3">
-            <h2 className="font-display text-sm tracking-wide text-muted-foreground">Lo último</h2>
-            <span className="h-px flex-1 bg-border" />
-            <span className="text-xs text-muted-foreground/70">
-              {snapshot.pending > 0 ? `${snapshot.pending} en cola` : "al día"}
-            </span>
-          </div>
-
-          {snapshot.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-10">
-              Todavía nada. Sé el primero en imprimir algo.
-            </p>
-          ) : (
-            <div className="space-y-2.5">
-              {snapshot.items.map(item => {
-                const s = STATUS_META[item.status];
-                return (
-                  <article key={item.id}
-                    className="rounded-xl border border-border bg-card px-4 py-3.5 shadow-[0_1px_0_rgba(16,15,15,0.03)]">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="text-[13px] font-medium">{item.from}</span>
-                      <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-                        <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                        {s.label}
-                      </span>
-                    </div>
-                    <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{item.message}</p>
-                  </article>
-                );
-              })}
+        {/* Your own messages — nobody sees anyone else's */}
+        {snapshot.items.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center gap-3">
+              <h2 className="font-display text-sm tracking-wide text-muted-foreground">Lo que has enviado</h2>
+              <span className="h-px flex-1 bg-border" />
             </div>
-          )}
-        </section>
+
+            <div className="space-y-2.5">
+              {snapshot.items.map(item => (
+                <article key={item.id}
+                  className="rounded-xl border border-border bg-card px-4 py-3.5">
+                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{item.message}</p>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground/70">— {item.from}</p>
+                </article>
+              ))}
+            </div>
+
+            <p className="text-[11px] text-muted-foreground/60 text-center pt-1">
+              Solo tú ves tus mensajes. Se imprimen en mi escritorio.
+            </p>
+          </section>
+        )}
 
         <footer className="pt-4 text-center">
           <a href="https://allison.sh" className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors">

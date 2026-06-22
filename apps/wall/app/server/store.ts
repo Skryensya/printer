@@ -146,6 +146,11 @@ export function listQueue(): QueueEntry[] {
   return getState().queue;
 }
 
+// Only the entries submitted from this IP — each visitor sees just their own.
+export function listQueueForIp(ip: string): QueueEntry[] {
+  return getState().queue.filter(e => e.ip === ip);
+}
+
 export function pendingCount(): number {
   return getState().queue.filter(e => e.status === "pending" || e.status === "printing").length;
 }

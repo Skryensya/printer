@@ -86,6 +86,36 @@
   --ring:                 #100f0f;
 }
 
+/* ─── Dark theme — Flexoki dark ───────────────────────────────────────────── */
+.dark {
+  --background:           #100f0f;
+  --foreground:           #cecdc3;
+
+  --card:                 #1c1b1a;
+  --card-foreground:      #cecdc3;
+  --popover:              #1c1b1a;
+  --popover-foreground:   #cecdc3;
+
+  --primary:              #cecdc3;
+  --primary-foreground:   #100f0f;
+
+  --secondary:            #282726;
+  --secondary-foreground: #cecdc3;
+
+  --muted:                #1c1b1a;
+  --muted-foreground:     #878580;
+
+  --accent:               #282726;
+  --accent-foreground:    #cecdc3;
+
+  --destructive:          #d14d41;
+
+  --border:               #282726;
+  --input:                #343331;
+  --input-bg:             #1c1b1a;
+  --ring:                 #cecdc3;
+}
+
 /* ─── Base ────────────────────────────────────────────────────────────────── */
 @layer base {
   * {

@@ -36,9 +36,15 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* Apply theme before paint to avoid a flash of the wrong theme. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("wall:theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme:dark)").matches))document.documentElement.classList.add("dark");}catch(e){}})();`,
+          }}
+        />
       </head>
       <body>
         {children}

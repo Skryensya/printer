@@ -3,25 +3,18 @@ import { getRequestIP, getRequestHeader } from "@tanstack/react-start/server";
 
 // ─── Public shapes (safe to ship to the client — no IPs, no secrets) ──────────
 
-export type EntryStatus = "pending" | "printing" | "printed" | "failed";
-
+// A message the current visitor sent. No print status is exposed — to the
+// sender it's simply "your message, which gets printed".
 export interface WallItem {
   id:        string;
   message:   string;
   from:      string;
-  status:    EntryStatus;
   createdAt: number;
-  printedAt: number | null;
 }
 
 export interface WallSnapshot {
-  items:             WallItem[];
-  pending:           number;
+  items:             WallItem[];   // ONLY the current visitor's own messages
   cooldownRemaining: number;       // ms left before this viewer can post again
-  budget: {
-    remainingMinute: number | null;
-    remainingDay:    number | null;
-  };
 }
 
 export interface SubmitInput {
@@ -49,25 +42,20 @@ function clientIp(): string {
 // ─── fetchWall ────────────────────────────────────────────────────────────────
 
 export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): Promise<WallSnapshot> => {
-  const { listQueue, pendingCount, getBudget, cooldownRemaining } = await import("./server/store");
+  const { listQueueForIp, cooldownRemaining } = await import("./server/store");
   const { ensureDrain } = await import("./server/drain");
   ensureDrain();
 
   const ip = clientIp();
-  const budget = getBudget();
 
   return {
-    items: listQueue().map(e => ({
+    items: listQueueForIp(ip).map(e => ({
       id:        e.id,
       message:   e.message,
       from:      e.from,
-      status:    e.status,
       createdAt: e.createdAt,
-      printedAt: e.printedAt,
     })),
-    pending:           pendingCount(),
     cooldownRemaining: cooldownRemaining(ip),
-    budget:            { remainingMinute: budget.remainingMinute, remainingDay: budget.remainingDay },
   };
 });
 
