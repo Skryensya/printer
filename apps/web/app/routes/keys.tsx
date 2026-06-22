@@ -94,6 +94,7 @@ const TYPE_LABELS: Record<string, string> = {
   message:        "Message",
   message_custom: "Message · custom from",
   ticket:         "Ticket",
+  todo:           "To-do / List",
   qr:             "QR Code",
   image:          "Image",
 };
@@ -129,7 +130,7 @@ function TypeSelector({ value, onChange }: {
               checked={checked.has(type)}
               onCheckedChange={() => toggle(type)}
               className="flex-shrink-0 mt-0.5" />
-            <span className="text-sm leading-snug">{TYPE_LABELS[type]}</span>
+            <span className="text-sm leading-snug">{TYPE_LABELS[type] ?? type}</span>
           </label>
         ))}
       </div>
@@ -406,6 +407,17 @@ function KeyRow({ apiKey, onEdit, onDuplicate, onRevoke, onDelete }: {
           </div>
         )}
       </td>
+      <td className="px-4 py-3.5 text-xs [font-variant-numeric:tabular-nums]">
+        {apiKey.enqueued === 0 ? (
+          <span className="text-muted-foreground/40">—</span>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-600" title="Printed">✓ {apiKey.printed}</span>
+            {apiKey.failed > 0 && <span className="text-destructive" title="Failed">✗ {apiKey.failed}</span>}
+            <span className="text-muted-foreground/50" title="Enqueued">/ {apiKey.enqueued}</span>
+          </div>
+        )}
+      </td>
       <td className="px-4 py-3.5 text-xs text-muted-foreground">
         {expires ?? <span className="text-muted-foreground/40">Never</span>}
       </td>
@@ -496,6 +508,7 @@ function KeysPage() {
                   <th className="text-left px-4 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Status</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Rate limit</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Types</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Usage</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Expires</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Created</th>
                   <th className="px-4 py-2.5" />

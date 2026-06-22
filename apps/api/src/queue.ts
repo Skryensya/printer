@@ -1,6 +1,6 @@
 import {
   enqueueJob, listPendingJobs, updateJobStatus, getJob,
-  incrementRetry, resetStuckJobs, resetJobForRetry,
+  incrementRetry, resetStuckJobs, resetJobForRetry, incrementKeyStat,
   type Job, type JobType,
 } from "./db";
 import type { JobFailureReason, WatcherEvent } from "@printer/core";
@@ -46,6 +46,7 @@ export class Queue {
 
   async enqueue(type: JobType, payload: unknown, source: string): Promise<Job> {
     const job = await enqueueJob(type, payload, source);
+    await incrementKeyStat(source, "enqueued");
     this.broadcast({ event: "job:queued", job: publicJob(job) });
     this.schedule(job);
     return job;
@@ -69,7 +70,10 @@ export class Queue {
   async onJobDone(id: string): Promise<void> {
     await updateJobStatus(id, "done");
     const job = await getJob(id);
-    if (job) this.broadcast({ event: "job:done", job: publicJob(job) });
+    if (job) {
+      await incrementKeyStat(job.source, "printed");
+      this.broadcast({ event: "job:done", job: publicJob(job) });
+    }
   }
 
   async onJobFailed(id: string, error: string, reason: JobFailureReason = "job_error"): Promise<void> {
@@ -91,7 +95,10 @@ export class Queue {
     } else {
       await updateJobStatus(id, "failed", error);
       const job = await getJob(id);
-      if (job) this.broadcast({ event: "job:failed", job: publicJob(job) });
+      if (job) {
+        await incrementKeyStat(job.source, "failed");
+        this.broadcast({ event: "job:failed", job: publicJob(job) });
+      }
     }
   }
 

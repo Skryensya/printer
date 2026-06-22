@@ -157,6 +157,22 @@ export interface ApiKey {
   rate_limit_per_min: number | null;
   rate_limit_per_day: number | null;
   allowed_types:      string[] | null;  // null = all types allowed
+  enqueued:           number;           // lifetime usage counters
+  printed:            number;
+  failed:             number;
+}
+
+export interface KeyStats {
+  source:     string;
+  enqueued:   number;
+  printed:    number;
+  failed:     number;
+  updated_at: number;
+}
+
+export async function getKeyStats(): Promise<KeyStats[]> {
+  const res = await get<{ stats: KeyStats[] }>("/api/v1/keys/stats", true);
+  return res.stats;
 }
 
 export async function listKeys(): Promise<ApiKey[]> {

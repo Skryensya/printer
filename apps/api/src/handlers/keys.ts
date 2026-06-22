@@ -1,4 +1,4 @@
-import { createApiKey, listApiKeys, revokeApiKey, deleteApiKey, updateApiKey, verifyApiKey } from "../db";
+import { createApiKey, listApiKeys, revokeApiKey, deleteApiKey, updateApiKey, verifyApiKey, listKeyStats } from "../db";
 import { PERMISSION_TYPES } from "../permissions";
 
 function err(msg: string, status = 400): Response {
@@ -7,6 +7,11 @@ function err(msg: string, status = 400): Response {
 
 export async function listKeysHandler(_req: Request): Promise<Response> {
   return Response.json({ keys: await listApiKeys() });
+}
+
+// Per-key lifetime usage counters (enqueued / printed / failed).
+export async function getKeyStatsHandler(_req: Request): Promise<Response> {
+  return Response.json({ stats: await listKeyStats() });
 }
 
 const VALID_TYPES = new Set<string>(PERMISSION_TYPES);

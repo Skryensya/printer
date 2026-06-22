@@ -4,6 +4,7 @@
 //   bun run daemon:stop     unload + disable (stays off across reboots)
 //   bun run daemon:restart  re-copy env, then restart the running daemon
 import { $ } from "bun";
+import { dirname } from "node:path";
 
 const DIR       = import.meta.dir;
 const ENV_SRC   = `${DIR}/agent.env`;
@@ -17,6 +18,7 @@ async function copyEnv() {
     console.error(`Missing ${ENV_SRC} — copy agent.env.example to agent.env and fill it in.`);
     process.exit(1);
   }
+  await $`sudo mkdir -p ${dirname(ENV_DST)}`; // /usr/local/etc may not exist (esp. Apple Silicon)
   await $`sudo cp ${ENV_SRC} ${ENV_DST}`;
   await $`sudo chown root:wheel ${ENV_DST}`;
   await $`sudo chmod 600 ${ENV_DST}`;

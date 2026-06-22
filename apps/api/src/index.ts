@@ -4,7 +4,7 @@ import {
   printMessageHandler, printImageHandler, printBordersHandler, printTestHandler,
 } from "./handlers/print";
 import {
-  listKeysHandler, createKeyHandler, updateKeyHandler, revokeKeyHandler, deleteKeyHandler, getKeyMeHandler,
+  listKeysHandler, createKeyHandler, updateKeyHandler, revokeKeyHandler, deleteKeyHandler, getKeyMeHandler, getKeyStatsHandler,
 } from "./handlers/keys";
 import {
   getJobHandler, listJobsHandler, retryJobHandler, cancelJobHandler, deleteJobHandler, reprintJobHandler,
@@ -118,9 +118,12 @@ async function router(req: Request): Promise<Response> {
     if (method === "POST") return withCors(withAdminAuth(createKeyHandler))(req);
   }
 
-  // /keys/me must be registered before /keys/:id to prevent "me" matching as an id
+  // /keys/me and /keys/stats must be registered before /keys/:id so they don't match as an id
   if (method === "GET" && path === "/api/v1/keys/me") {
     return withCors(getKeyMeHandler)(req);
+  }
+  if (method === "GET" && path === "/api/v1/keys/stats") {
+    return withCors(withAdminAuth(getKeyStatsHandler))(req);
   }
 
   const keyMatch = path.match(/^\/api\/v1\/keys\/([^/]+)$/);

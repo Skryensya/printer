@@ -43,12 +43,52 @@ export async function migrate(): Promise<void> {
       PRIMARY KEY (key_id, date)
     )
   `;
+
+  // Lifetime usage counters per key, keyed by source (the key name jobs record).
+  // Persistent: survives job deletion / queue clears.
+  await sql`
+    CREATE TABLE IF NOT EXISTS key_stats (
+      source     TEXT    PRIMARY KEY,
+      enqueued   INTEGER NOT NULL DEFAULT 0,
+      printed    INTEGER NOT NULL DEFAULT 0,
+      failed     INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::int
+    )
+  `;
 }
 
 // Tests only: ensure schema exists, then wipe all rows for an isolated run.
 export async function resetDbForTest(): Promise<void> {
   await migrate();
-  await sql`TRUNCATE jobs, api_keys, rate_limit_daily`;
+  await sql`TRUNCATE jobs, api_keys, rate_limit_daily, key_stats`;
+}
+
+// ─── Key usage stats ───────────────────────────────────────────────────────────
+
+export interface KeyStats {
+  source:     string;
+  enqueued:   number;
+  printed:    number;
+  failed:     number;
+  updated_at: number;
+}
+
+type StatField = "enqueued" | "printed" | "failed";
+
+// Atomically bump one counter for a source, creating the row on first use.
+// Column name is from a fixed union (safe to interpolate); source is parameterized.
+export async function incrementKeyStat(source: string, field: StatField): Promise<void> {
+  await sql.unsafe(
+    `INSERT INTO key_stats (source, ${field}, updated_at)
+     VALUES ($1, 1, EXTRACT(EPOCH FROM NOW())::int)
+     ON CONFLICT (source) DO UPDATE
+       SET ${field} = key_stats.${field} + 1, updated_at = EXTRACT(EPOCH FROM NOW())::int`,
+    [source],
+  );
+}
+
+export async function listKeyStats(): Promise<KeyStats[]> {
+  return sql<KeyStats[]>`SELECT source, enqueued, printed, failed, updated_at FROM key_stats ORDER BY printed DESC`;
 }
 
 // ─── Job helpers ─────────────────────────────────────────────────────────────
@@ -184,12 +224,18 @@ export async function verifyApiKey(raw: string): Promise<ApiKey | null> {
   return key;
 }
 
-type ApiKeyRow = Omit<ApiKey, "hashed_key">;
+type ApiKeyRow = Omit<ApiKey, "hashed_key"> & { enqueued: number; printed: number; failed: number };
 
 export async function listApiKeys(): Promise<(Omit<ApiKeyRow, "allowed_types"> & { allowed_types: string[] | null })[]> {
   const rows = await sql<ApiKeyRow[]>`
-    SELECT id, name, expires_at, revoked_at, created_at, rate_limit_per_min, rate_limit_per_day, allowed_types
-    FROM api_keys ORDER BY created_at DESC, seq DESC
+    SELECT k.id, k.name, k.expires_at, k.revoked_at, k.created_at,
+           k.rate_limit_per_min, k.rate_limit_per_day, k.allowed_types,
+           COALESCE(s.enqueued, 0) AS enqueued,
+           COALESCE(s.printed, 0)  AS printed,
+           COALESCE(s.failed, 0)   AS failed
+    FROM api_keys k
+    LEFT JOIN key_stats s ON s.source = k.name
+    ORDER BY k.created_at DESC, k.seq DESC
   `;
   return rows.map(r => ({
     ...r,
