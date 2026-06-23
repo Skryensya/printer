@@ -480,8 +480,8 @@ function PingPage() {
           Mándame un <span style={{ color: "var(--signal)" }}>ping</span>.
         </h1>
         <p className="text-[15px] leading-relaxed text-muted-foreground text-pretty">
-          Escribe algo y <span className="font-mono">*zzzt*</span> — sale en papel en mi escritorio.{" "}
-          <span className="text-foreground">Y sí, lo leo.</span>
+          Lo que mandes sale impreso como una boleta en mi escritorio.{" "}
+          <span className="font-mono italic">zzzt</span>.
         </p>
       </div>
 
