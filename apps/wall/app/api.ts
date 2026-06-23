@@ -103,6 +103,30 @@ export const fetchPhotoFn = createServerFn({ method: "GET" })
     return b64 ? { src: `data:image/png;base64,${b64}` } : null;
   });
 
+// ─── hidePing ─────────────────────────────────────────────────────────────────
+// Removes a ping from the owner's history view only. The entry stays queued (so
+// it still prints) and the printer API job + R2 archive are untouched — admin
+// keeps the full record. Owner-scoped like fetchPhoto.
+
+export const hidePingFn = createServerFn({ method: "POST" })
+  .validator((d: { id: string }) => d)
+  .handler(async ({ data }): Promise<{ ok: boolean }> => {
+    const { getEntry, hideEntry } = await import("./server/store");
+    const { currentUser } = await import("./server/auth");
+
+    const entry = getEntry(data.id);
+    if (!entry) return { ok: false };
+
+    const user = await currentUser();
+    const owns = entry.username
+      ? !!user && user.username === entry.username
+      : entry.ip === clientIp();
+    if (!owns) return { ok: false };
+
+    hideEntry(data.id);
+    return { ok: true };
+  });
+
 // ─── submitMessage ──────────────────────────────────────────────────────────
 
 export const submitMessageFn = createServerFn({ method: "POST" })

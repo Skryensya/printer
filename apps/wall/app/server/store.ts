@@ -24,6 +24,7 @@ export interface QueueEntry {
   jobId:     string | null;      // message print job id
   imageJobId: string | null;     // image print job id — used to read its R2 url
   error:     string | null;
+  hidden:    boolean;            // owner hid it from their history (still printed/archived)
 }
 
 // Attached photos live in memory only — NOT persisted to the JSON state file
@@ -201,6 +202,7 @@ export function enqueue(
     jobId:      null,
     imageJobId: null,
     error:      null,
+    hidden:     false,
   };
   if (image) {
     pendingImages.set(entry.id, image);   // full payload to print (dropped after)
@@ -238,16 +240,24 @@ export function listQueue(): QueueEntry[] {
   return getState().queue;
 }
 
-// Anonymous pings from this IP only. Account-tagged pings are deliberately
-// excluded — even though they share the device IP, they must be visible solely
-// when logged into that account, never after logout.
+// Anonymous pings from this IP only, minus ones the visitor hid. Account-tagged
+// pings are deliberately excluded — even though they share the device IP, they
+// must be visible solely when logged into that account, never after logout.
 export function listQueueForIp(ip: string): QueueEntry[] {
-  return getState().queue.filter(e => e.ip === ip && e.username === null);
+  return getState().queue.filter(e => e.ip === ip && e.username === null && !e.hidden);
 }
 
-// A logged-in account's own messages, across IPs/devices.
+// A logged-in account's own messages, across IPs/devices, minus hidden ones.
 export function listQueueForUser(username: string): QueueEntry[] {
-  return getState().queue.filter(e => e.username === username);
+  return getState().queue.filter(e => e.username === username && !e.hidden);
+}
+
+// Hide an entry from its owner's history. The entry stays in the queue (so it
+// still drains/prints) and the printer API job + archive are untouched — this is
+// a view-only flag, not a delete.
+export function hideEntry(id: string): void {
+  const entry = getState().queue.find(e => e.id === id);
+  if (entry) { entry.hidden = true; scheduleSave(); }
 }
 
 export function pendingCount(): number {

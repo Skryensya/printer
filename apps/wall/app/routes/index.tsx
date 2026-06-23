@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Sun, Moon, LogOut, ArrowUp, ImagePlus, X as XIcon } from "lucide-react";
-import { fetchWallFn, submitMessageFn, fetchPhotoFn, type WallSnapshot } from "~/api";
+import { Loader2, Sun, Moon, LogOut, ArrowUp, ImagePlus, X as XIcon, Trash2 } from "lucide-react";
+import { fetchWallFn, submitMessageFn, fetchPhotoFn, hidePingFn, type WallSnapshot } from "~/api";
 import { loginFn, logoutFn } from "~/session";
 import { getRecaptchaToken } from "~/lib/recaptcha";
 import { Button } from "~/components/ui/button";
@@ -116,8 +116,9 @@ function LoginPanel({ onDone }: { onDone: () => void }) {
   );
 }
 
-function PingSlip({ id, message, from, createdAt, delay, hasImage }: {
+function PingSlip({ id, message, from, createdAt, delay, hasImage, onHide }: {
   id: string; message: string; from: string; createdAt: number; delay: number; hasImage: boolean;
+  onHide: () => void;
 }) {
   const clock = new Date(createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const [photo, setPhoto] = useState<string | null>(null);
@@ -140,7 +141,13 @@ function PingSlip({ id, message, from, createdAt, delay, hasImage }: {
       {/* receipt header */}
       <div className="flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
         <span>ping</span>
-        <span className="[font-variant-numeric:tabular-nums]">{clock}</span>
+        <div className="flex items-center gap-2">
+          <span className="[font-variant-numeric:tabular-nums]">{clock}</span>
+          <button type="button" onClick={onHide} aria-label="Quitar de mi historial"
+            className="relative -mr-1 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/45 transition-[color,background-color,scale] hover:bg-destructive/10 hover:text-destructive active:scale-[0.96] before:absolute before:-inset-1.5 before:content-['']">
+            <Trash2 size={12} />
+          </button>
+        </div>
       </div>
 
       <hr className="perf mx-4 my-2.5" />
@@ -294,6 +301,13 @@ function PingPage() {
     }
   }
 
+  // Hide a ping from this history view. Optimistic — the server keeps it queued
+  // and the printer API keeps the job; this only drops it from the owner's list.
+  async function handleHide(id: string) {
+    setSnapshot(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
+    try { await hidePingFn({ data: { id } }); } catch { /* reappears on next poll if it failed */ }
+  }
+
   const hint = user ? "" : onCooldown ? formatCooldown(cooldown) : "1 ping · 30 min";
 
   return (
@@ -417,7 +431,8 @@ function PingPage() {
           </h2>
           {snapshot.items.map((item, i) => (
             <PingSlip key={item.id} id={item.id} message={item.message} from={item.from}
-              createdAt={item.createdAt} delay={Math.min(i * 50, 250)} hasImage={item.hasImage} />
+              createdAt={item.createdAt} delay={Math.min(i * 50, 250)} hasImage={item.hasImage}
+              onHide={() => handleHide(item.id)} />
           ))}
         </section>
       )}
