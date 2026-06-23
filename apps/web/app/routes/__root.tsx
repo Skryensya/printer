@@ -98,11 +98,12 @@ function DynamicFavicon() {
     const color = FAVICON_COLOR[key] ?? FAVICON_COLOR["loading"]!;
     const animate = status === "ready" || status === "printer_offline";
     if (!animate) { setFaviconHref(drawFavicon(color, 0, false)); return; }
+    // Fluid but unhurried: ~40ms frames, full pulse ≈ 1.4s.
     let phase = 0;
     const id = setInterval(() => {
-      phase = (phase + 0.08) % 1;
+      phase = (phase + 0.028) % 1;
       setFaviconHref(drawFavicon(color, phase, true));
-    }, 90);
+    }, 40);
     return () => clearInterval(id);
   }, [status]);
 
