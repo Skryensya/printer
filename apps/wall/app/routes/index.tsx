@@ -561,7 +561,7 @@ function PingPage() {
           <div className="flex items-center gap-3">
             {nearLimit && <CountArc used={message.length} />}
             <Button type="submit" disabled={!canSend} size="lg"
-              className="shrink-0 gap-1.5 rounded-full pl-5 pr-4 transition-transform active:scale-[0.95]">
+              className="shrink-0 cursor-pointer gap-1.5 rounded-full pl-5 pr-4 transition-[transform,filter,background-color] active:scale-[0.92] active:brightness-90">
               {sending ? "enviando…" : "Ping"}
               {sending ? <Loader2 size={15} className="animate-spin" /> : <ChevronRight size={15} className="-mr-0.5" />}
             </Button>
