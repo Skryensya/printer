@@ -34,21 +34,20 @@ Cuando se supera un límite, la API responde con `429 Too Many Requests`:
 
 ```json
 {
-  "ok": false,
-  "error": "rate_limit_exceeded",
-  "limit": "minute",
+  "error": "Rate limit exceeded",
+  "exceeded": "minute",
   "retry_after": 14
 }
 ```
 
-- `limit` — cuál ventana se agotó: `"minute"` o `"day"`
+- `exceeded` — cuál ventana se agotó: `"minute"` o `"day"`
 - `retry_after` — segundos que faltan para poder reintentar (también en el header `Retry-After`)
 
 ---
 
 ## Trabajos (Jobs)
 
-Cada request de impresión crea un **Job** y devuelve su `jobId`. El Job pasa por estos estados:
+Cada request de impresión crea un **Job** y devuelve su `id`. El Job pasa por estos estados:
 
 ```
 pending → printing → done
@@ -240,7 +239,6 @@ curl https://tu-servidor/api/v1/jobs/550e8400-e29b-41d4-a716-446655440000 \
 **Respuesta:**
 ```json
 {
-  "ok": true,
   "job": {
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "type": "text",
@@ -250,10 +248,13 @@ curl https://tu-servidor/api/v1/jobs/550e8400-e29b-41d4-a716-446655440000 \
     "retry_count": 0,
     "error": null,
     "created_at": 1750000000,
-    "updated_at": 1750000005
+    "updated_at": 1750000005,
+    "image_url": null
   }
 }
 ```
+
+`image_url` es `null` salvo para Jobs de tipo `image` archivados (URL pública del original).
 
 `created_at` y `updated_at` son Unix timestamps en segundos.
 
@@ -261,29 +262,42 @@ curl https://tu-servidor/api/v1/jobs/550e8400-e29b-41d4-a716-446655440000 \
 
 ## Respuestas de éxito
 
-Todos los endpoints de impresión devuelven `202 Accepted` al encolar correctamente:
+Todos los endpoints de impresión devuelven `202 Accepted` al encolar correctamente, con un header `Location` apuntando al recurso del Job:
+
+```
+Location: /api/v1/jobs/550e8400-e29b-41d4-a716-446655440000
+```
 
 ```json
 {
-  "ok": true,
-  "jobId": "550e8400-e29b-41d4-a716-446655440000"
+  "id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
 ## Errores
 
-Todos los errores siguen el mismo formato:
+El cuerpo de error siempre lleva un campo `error` con un mensaje legible (nunca un código de máquina — el status HTTP es la señal procesable):
 
 ```json
 {
-  "ok": false,
   "error": "descripción del error"
 }
 ```
 
-| Código | Causa |
-|---|---|
-| `400` | Body inválido o campo requerido faltante |
-| `401` | API key ausente, inválida, revocada o expirada |
-| `429` | Rate limit excedido |
-| `404` | Job no encontrado |
+| Código | Causa | Campos extra |
+|---|---|---|
+| `400` | Body inválido o campo requerido faltante | — |
+| `401` | API key ausente, inválida, revocada o expirada | — |
+| `403` | La key no tiene permiso para el tipo solicitado | `type` (tipo intentado), `allowed` (tipos permitidos, o `null` si no hay restricción) |
+| `404` | Job no encontrado (o pertenece a otra key) | — |
+| `429` | Rate limit excedido | `exceeded` (`"minute"` o `"day"`), `retry_after` (segundos) |
+
+Ejemplo de `403`:
+
+```json
+{
+  "error": "Job type not permitted",
+  "type": "image",
+  "allowed": ["text"]
+}
+```
