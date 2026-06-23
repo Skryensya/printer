@@ -293,7 +293,9 @@ function PingPage() {
       <header className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2">
           <PulseMark shoot={justPinged} />
-          <span className="font-display text-lg font-semibold tracking-tight lowercase">ping</span>
+          <span className="font-display text-lg font-semibold tracking-tight lowercase">
+            ping<span className="text-muted-foreground/60">.allison.sh</span>
+          </span>
         </span>
         <div className="flex items-center gap-1">
           {user ? (

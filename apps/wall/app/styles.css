@@ -132,11 +132,14 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Subtle two-hue wash: a signal-tinted glow up top, a warm amber pool
-       bottom-right, over the paper base. Fixed so it never scrolls away. */
+    /* Soft three-point mesh over the paper base: a signal-tinted glow at the
+       top-left, a warm amber pool bottom-right, and a faint green lift between
+       them for depth. Low alphas + wide falloff keep it atmospheric, not loud.
+       Fixed so it never scrolls away. */
     background:
-      radial-gradient(90% 55% at 50% -8%,  color-mix(in oklch, var(--signal) 14%, transparent), transparent 70%),
-      radial-gradient(75% 50% at 92% 108%, color-mix(in oklch, var(--color-amber) 10%, transparent), transparent 72%),
+      radial-gradient(115% 80% at 8% -12%,   color-mix(in oklch, var(--signal)      16%, transparent), transparent 58%),
+      radial-gradient(100% 75% at 100% 112%, color-mix(in oklch, var(--color-amber) 13%, transparent), transparent 60%),
+      radial-gradient(70% 60% at 95% 0%,     color-mix(in oklch, var(--color-green)   7%, transparent), transparent 55%),
       var(--background);
     background-attachment: fixed;
   }
@@ -152,12 +155,13 @@
    rings echo that; the slips echo the paper it prints on. */
 
 @keyframes ping-ring {
-  0%   { transform: scale(0.55); opacity: 0.5; }
-  100% { transform: scale(2.4);  opacity: 0; }
+  0%   { transform: scale(0.7); opacity: 0.28; }
+  70%  { opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
 }
 @keyframes ping-breathe {
   0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.12); }
+  50%      { transform: scale(1.06); }
 }
 @keyframes ping-rise {
   0%   { opacity: 0; transform: translateY(8px) scale(0.99); }
@@ -168,18 +172,20 @@
   100% { transform: scale(3);   opacity: 0; }
 }
 
-/* Concentric rings emanating from the brand mark — tinted with the signal hue. */
+/* Concentric rings emanating from the brand mark — tinted with the signal hue.
+   Thin, slow and faint so the mark feels alive without demanding attention. */
 .ping-rings > span {
   position: absolute;
   inset: 0;
   border-radius: 9999px;
-  border: 1.5px solid var(--signal);
-  animation: ping-ring 2.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  border: 1px solid var(--signal);
+  animation: ping-ring 3.8s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
-.ping-rings > span:nth-child(2) { animation-delay: 0.9s; }
-.ping-rings > span:nth-child(3) { animation-delay: 1.8s; }
+.ping-rings > span:nth-child(2) { animation-delay: 1.27s; }
+/* Third ring dropped for a calmer, less busy pulse. */
+.ping-rings > span:nth-child(3) { display: none; }
 
-.ping-dot { animation: ping-breathe 2.8s ease-in-out infinite; }
+.ping-dot { animation: ping-breathe 3.8s ease-in-out infinite; }
 
 /* One-shot ripple fired on a successful send. */
 .ping-shoot { animation: ping-shoot 0.7s ease-out forwards; }
