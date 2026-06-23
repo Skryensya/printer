@@ -16,6 +16,7 @@ export const Route = createRootRoute({
       { name: "description", content: "Mándame un ping: escribe un mensaje y sale impreso en papel, en la impresora térmica que tengo en mi escritorio." },
     ],
     links: [
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "preconnect", href: "https://api.fontshare.com" },
       {
         rel: "stylesheet",

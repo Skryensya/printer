@@ -20,6 +20,9 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Printer" },
     ],
+    links: [
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+    ],
   }),
   beforeLoad: async ({ location }) => {
     if (location.pathname === "/login" || location.pathname === "/docs") return;
@@ -28,6 +31,83 @@ export const Route = createRootRoute({
   },
   component: RootComponent,
 });
+
+// ─── Live favicon — reflects agent status and animates ────────────────────────
+// Browsers can't animate a favicon with CSS, so we redraw frames on a timer and
+// swap the <link rel="icon"> href. Color = agent state; the expanding ring is the
+// "active" pulse so the tab visibly signals connection at a glance.
+
+const FAVICON_COLOR: Record<string, string> = {
+  ready:           "#22c55e", // green — agent + printer up
+  printer_offline: "#f59e0b", // amber — agent up, no printer
+  offline:         "#9ca3af", // gray  — no agent connected
+  loading:         "#9ca3af", // gray  — unknown / not authenticated (also null)
+};
+
+function setFaviconHref(href: string) {
+  let link = document.querySelector<HTMLLinkElement>("link#live-favicon");
+  if (!link) {
+    link = document.createElement("link");
+    link.id = "live-favicon";
+    link.rel = "icon";
+    document.head.appendChild(link);
+  }
+  link.href = href;
+}
+
+function drawFavicon(color: string, phase: number, animate: boolean): string {
+  const c = document.createElement("canvas");
+  c.width = c.height = 32;
+  const ctx = c.getContext("2d");
+  if (!ctx) return "";
+  ctx.clearRect(0, 0, 32, 32);
+  // Expanding, fading ring — only when connected (ready/printer states).
+  if (animate) {
+    const r = 5 + phase * 10;
+    ctx.beginPath();
+    ctx.arc(16, 16, r, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 1 - phase;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  // Core dot.
+  ctx.beginPath();
+  ctx.arc(16, 16, 5.5, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  return c.toDataURL("image/png");
+}
+
+function DynamicFavicon() {
+  const [status, setStatus] = useState<AgentStatus | null | "loading">("loading");
+
+  // Poll agent status independently of the badge.
+  useEffect(() => {
+    let on = true;
+    const fetchOnce = () => getAgentStatus().then(s => { if (on) setStatus(s); }).catch(() => {});
+    fetchOnce();
+    const id = setInterval(fetchOnce, 8_000);
+    return () => { on = false; clearInterval(id); };
+  }, []);
+
+  // Animate frames; redraw the favicon on each tick.
+  useEffect(() => {
+    const key = status === null ? "loading" : status; // null (offline/unauth) → neutral gray
+    const color = FAVICON_COLOR[key] ?? FAVICON_COLOR["loading"]!;
+    const animate = status === "ready" || status === "printer_offline";
+    if (!animate) { setFaviconHref(drawFavicon(color, 0, false)); return; }
+    let phase = 0;
+    const id = setInterval(() => {
+      phase = (phase + 0.08) % 1;
+      setFaviconHref(drawFavicon(color, phase, true));
+    }, 90);
+    return () => clearInterval(id);
+  }, [status]);
+
+  return null;
+}
 
 function AgentStatusBadge() {
   const [status, setStatus] = useState<AgentStatus | null | "loading">("loading");
@@ -180,6 +260,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        <DynamicFavicon />
         {children}
         <Scripts />
       </body>
