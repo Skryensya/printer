@@ -15,6 +15,9 @@ export const config = {
   dataDir:         process.env["WALL_DATA_DIR"]         ?? ".wall-data",
   // Minimum gap between sends to the printer API, on top of the API's own limits.
   drainIntervalMs: Number(process.env["WALL_DRAIN_INTERVAL_MS"] ?? 1500),
+  // How long the local thumbnail fallback lives before being swept. It only
+  // needs to outlast the R2 upload window; R2 is the permanent store. Default 1h.
+  photoTtlMs:      Number(process.env["WALL_PHOTO_TTL_MS"] ?? 60 * 60 * 1000),
   maxMessageLen:   240,
   // Minimum time a human takes to fill the form. Faster => treated as a bot.
   minFillMs:       2000,

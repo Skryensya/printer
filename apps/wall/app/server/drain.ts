@@ -7,7 +7,7 @@
 
 import { config } from "./config";
 import { sendMessage, sendImage } from "./printer";
-import { nextPending, updateEntry, budgetExhausted, clearCooldown, getImage, dropImage } from "./store";
+import { nextPending, updateEntry, budgetExhausted, clearCooldown, getImage, dropImage, ensurePhotoSweep } from "./store";
 
 let started = false;
 let draining = false;
@@ -65,4 +65,5 @@ export function ensureDrain(): void {
   if (started) return;
   started = true;
   setInterval(() => { void tick(); }, config.drainIntervalMs);
+  ensurePhotoSweep(); // expire local thumbnail fallbacks once R2 has them
 }

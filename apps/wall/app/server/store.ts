@@ -5,7 +5,7 @@
 // per-IP cooldown can't be reset by bouncing the process. A single long-lived
 // node server owns this module, so a plain module-level singleton is correct.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "./config";
 
@@ -70,6 +70,28 @@ export function getStoredPhoto(id: string): string | null {
     if (!existsSync(p)) return null;
     return readFileSync(p).toString("base64");
   } catch { return null; }
+}
+
+// Delete thumbnail files older than the TTL. R2 is the permanent store; the disk
+// copy only needs to bridge the upload window. By mtime, so it also clears
+// orphans left by a restart. Runs periodically (see ensurePhotoSweep).
+export function sweepExpiredPhotos(now = Date.now()): void {
+  const dir = photosDir();
+  if (!existsSync(dir)) return;
+  for (const file of readdirSync(dir)) {
+    try {
+      const p = join(dir, file);
+      if (now - statSync(p).mtimeMs > config.photoTtlMs) unlinkSync(p);
+    } catch { /* already gone / unreadable */ }
+  }
+}
+
+let sweepStarted = false;
+export function ensurePhotoSweep(): void {
+  if (sweepStarted) return;
+  sweepStarted = true;
+  sweepExpiredPhotos();                              // once at boot (clears orphans)
+  setInterval(() => sweepExpiredPhotos(), 10 * 60_000); // then every 10 min
 }
 
 export function getEntry(id: string): QueueEntry | undefined {
