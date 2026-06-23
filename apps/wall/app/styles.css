@@ -185,7 +185,13 @@
 /* Third ring dropped for a calmer, less busy pulse. */
 .ping-rings > span:nth-child(3) { display: none; }
 
-.ping-dot { animation: ping-breathe 3.8s ease-in-out infinite; }
+.ping-dot {
+  animation: ping-breathe 3.8s ease-in-out infinite;
+  /* Soft signal glow so the dot reads as an emitting beacon, not a flat disc. */
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--signal) 30%, transparent),
+    0 0 6px      color-mix(in oklch, var(--signal) 55%, transparent);
+}
 
 /* One-shot ripple fired on a successful send. */
 .ping-shoot { animation: ping-shoot 0.7s ease-out forwards; }

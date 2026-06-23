@@ -181,6 +181,7 @@ function PingPage() {
   const [cooldown, setCooldown] = useState(initial.cooldownRemaining);
   const [showLogin, setShowLogin] = useState(false);
   const [justPinged, setJustPinged] = useState(false);
+  const [processing, setProcessing] = useState(false); // downscaling a picked photo
   // Attached photo (logged-in only): preview = data URL for <img>, data = base64 payload.
   // preview/data = 384px print bitmap; original = the full-res file, archived only.
   const [photo, setPhoto] = useState<{
@@ -215,6 +216,15 @@ function PingPage() {
       preview: png, data: png.split(",")[1] ?? "", mediaType: "image/png",
       original: dataUrl.split(",")[1] ?? "", originalMediaType: file.type || "image/png",
     });
+  }
+
+  // Wraps pickPhoto with a processing state so the button can show activity.
+  async function handlePickFile(file: File) {
+    setProcessing(true);
+    setError("");
+    try { await pickPhoto(file); }
+    catch { setError("No se pudo cargar la imagen"); }
+    finally { setProcessing(false); }
   }
 
   useEffect(() => {
@@ -342,11 +352,13 @@ function PingPage() {
 
         {/* Photo preview (logged-in, when attached) */}
         {user && photo && (
-          <div className="px-4 pb-3">
+          <div className="ping-rise px-4 pb-3">
             <div className="relative inline-block">
-              <img src={photo.preview} alt="adjunto" className="max-h-40 rounded-lg border border-border" style={{ imageRendering: "pixelated" }} />
-              <button type="button" onClick={() => { setPhoto(null); if (fileRef.current) fileRef.current.value = ""; }}
-                className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background shadow transition-transform active:scale-90">
+              <img src={photo.preview} alt="Foto adjunta"
+                className="max-h-44 rounded-xl outline outline-1 -outline-offset-1 outline-foreground/10" />
+              <button type="button" aria-label="Quitar foto"
+                onClick={() => { setPhoto(null); if (fileRef.current) fileRef.current.value = ""; }}
+                className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background transition-[scale] active:scale-[0.96] shadow-[0_1px_2px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.16)] before:absolute before:-inset-2 before:content-['']">
                 <XIcon size={13} />
               </button>
             </div>
@@ -364,11 +376,13 @@ function PingPage() {
             {user && !photo && (
               <>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) pickPhoto(f).catch(() => setError("No se pudo cargar la imagen")); }} />
-                <button type="button" onClick={() => fileRef.current?.click()} disabled={sending}
-                  aria-label="Adjuntar foto"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
-                  <ImagePlus size={16} />
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handlePickFile(f); e.target.value = ""; }} />
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={sending || processing}
+                  className="group inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-[color,background-color,border-color,scale] hover:border-ring/40 hover:text-foreground active:scale-[0.96] disabled:opacity-50">
+                  {processing
+                    ? <Loader2 size={15} className="animate-spin" />
+                    : <ImagePlus size={15} className="transition-transform group-hover:-translate-y-px" />}
+                  {processing ? "Cargando…" : "Foto"}
                 </button>
               </>
             )}
