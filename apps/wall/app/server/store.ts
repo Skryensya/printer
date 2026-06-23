@@ -214,9 +214,11 @@ export function listQueue(): QueueEntry[] {
   return getState().queue;
 }
 
-// Only the entries submitted from this IP — each anonymous visitor sees their own.
+// Anonymous pings from this IP only. Account-tagged pings are deliberately
+// excluded — even though they share the device IP, they must be visible solely
+// when logged into that account, never after logout.
 export function listQueueForIp(ip: string): QueueEntry[] {
-  return getState().queue.filter(e => e.ip === ip);
+  return getState().queue.filter(e => e.ip === ip && e.username === null);
 }
 
 // A logged-in account's own messages, across IPs/devices.
