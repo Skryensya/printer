@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from "bun";
 import {
   onAgentConnected, onAgentDisconnected,
-  onJobStarted, onJobDone, onJobFailed,
+  onJobStarted, onJobDone, onJobFailed, jobPayload,
 } from "./queue";
 import { parseAgentEvent } from "@printer/core";
 import type { Job } from "./db";
@@ -50,7 +50,7 @@ class AgentConnection {
     try {
       this.ws.send(JSON.stringify({
         event: "job:print",
-        job:   { id: job.id, type: job.type, payload: JSON.parse(job.payload) },
+        job:   { id: job.id, type: job.type, payload: jobPayload(job) },
       }));
       return true;
     } catch {

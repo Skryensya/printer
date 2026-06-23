@@ -11,13 +11,13 @@ export async function getJobHandler(_req: Request, id: string, source: string | 
   if (!job) return err("Job not found", 404);
   if (source !== null && job.source !== source) return err("Job not found", 404);
   // Return full payload for single-job fetch (list endpoint strips large fields like image base64)
-  return Response.json({ job: { ...publicJob(job), payload: JSON.parse(job.payload) } });
+  return Response.json({ job: publicJob(job, true) });
 }
 
 export async function listJobsHandler(req: Request): Promise<Response> {
   const url    = new URL(req.url);
   const status = url.searchParams.get("status") as JobStatus | null;
-  const jobs   = (await listJobs(status ?? undefined)).map(publicJob);
+  const jobs   = (await listJobs(status ?? undefined)).map(j => publicJob(j));
   return Response.json({ jobs });
 }
 

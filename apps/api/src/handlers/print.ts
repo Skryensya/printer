@@ -1,10 +1,16 @@
-import { intakeText, intakeTicket, intakeTodo, intakeImage, intakeMessage } from "../intake";
+import {
+  intakeText, intakeTicket, intakeTodo, intakeImage, intakeMessage, type IntakeResult,
+} from "../intake";
 import { enqueue } from "../queue";
 
 async function parseJson(req: Request): Promise<unknown> {
   try { return await req.json(); }
   catch { return null; }
 }
+
+// ─── HTTP transport ────────────────────────────────────────────────────────────
+// The one place a print outcome becomes bytes: 202 + Location on success, the
+// domain error mapped to its status otherwise. No handler builds Responses itself.
 
 function accepted(id: string): Response {
   return new Response(JSON.stringify({ id }), {
@@ -13,41 +19,37 @@ function accepted(id: string): Response {
   });
 }
 
-export async function printTextHandler(req: Request, source: string): Promise<Response> {
-  const result = await intakeText(await parseJson(req), source);
-  return result.ok ? accepted(result.job.id) : result.response;
+function finish(result: IntakeResult): Response {
+  return result.ok
+    ? accepted(result.job.id)
+    : Response.json({ error: result.error }, { status: result.status });
 }
 
-export async function printTicketHandler(req: Request, source: string): Promise<Response> {
-  const result = await intakeTicket(await parseJson(req), source);
-  return result.ok ? accepted(result.job.id) : result.response;
-}
+// Body-carrying print routes share one shape: parse → intake → map to HTTP.
+const printJson =
+  (intake: (body: unknown, source: string) => Promise<IntakeResult>) =>
+  async (req: Request, source: string): Promise<Response> =>
+    finish(await intake(await parseJson(req), source));
 
-export async function printTodoHandler(req: Request, source: string): Promise<Response> {
-  const result = await intakeTodo(await parseJson(req), source);
-  return result.ok ? accepted(result.job.id) : result.response;
-}
+export const printTextHandler   = printJson(intakeText);
+export const printTicketHandler = printJson(intakeTicket);
+export const printTodoHandler   = printJson(intakeTodo);
+export const printImageHandler  = printJson(intakeImage);
 
-export async function printImageHandler(req: Request, source: string): Promise<Response> {
-  const result = await intakeImage(await parseJson(req), source);
-  return result.ok ? accepted(result.job.id) : result.response;
-}
-
+// Message carries an extra grant (customFromAllowed), so it keeps its own arm.
 export async function printMessageHandler(
   req: Request,
   source: string,
   customFromAllowed: boolean,
 ): Promise<Response> {
-  const result = await intakeMessage(await parseJson(req), source, customFromAllowed);
-  return result.ok ? accepted(result.job.id) : result.response;
+  return finish(await intakeMessage(await parseJson(req), source, customFromAllowed));
 }
 
+// Bodyless debug prints — enqueue directly, no intake validation.
 export async function printBordersHandler(_req: Request, source: string): Promise<Response> {
-  const job = await enqueue("borders", { v: 1 }, source);
-  return accepted(job.id);
+  return accepted((await enqueue("borders", { v: 1 }, source)).id);
 }
 
 export async function printTestHandler(_req: Request, source: string): Promise<Response> {
-  const job = await enqueue("test", { v: 1 }, source);
-  return accepted(job.id);
+  return accepted((await enqueue("test", { v: 1 }, source)).id);
 }

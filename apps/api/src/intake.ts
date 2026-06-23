@@ -8,15 +8,16 @@ import type { CardData } from "@printer/core";
 import { archiveImage } from "./storage";
 
 // ─── Result type ──────────────────────────────────────────────────────────────
-// A validated, enqueued Job on success; a ready-to-return 4xx Response on failure.
-// Handlers call intake and immediately return result.response on failure.
+// A validated, enqueued Job on success; a domain-level rejection on failure.
+// Intake speaks Jobs and validation errors, never HTTP — the print handler maps
+// the result to 202 / 4xx. `status` defaults to 400 (bad request).
 
 export type IntakeResult =
   | { ok: true;  job: Job }
-  | { ok: false; response: Response };
+  | { ok: false; error: string; status: number };
 
 function reject(error: string, status = 400): IntakeResult {
-  return { ok: false, response: Response.json({ error }, { status }) };
+  return { ok: false, error, status };
 }
 
 // ─── Per-type intake functions ────────────────────────────────────────────────

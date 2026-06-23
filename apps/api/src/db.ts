@@ -1,4 +1,5 @@
 import { sql } from "bun";
+import { KeyPermissions } from "./permissions";
 
 // ─── Migration ────────────────────────────────────────────────────────────────
 
@@ -266,7 +267,7 @@ export async function createApiKey(
   const id     = crypto.randomUUID();
   const raw    = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
   const hashed = await hashKey(raw);
-  const typesJson = allowedTypes != null ? JSON.stringify(allowedTypes) : null;
+  const typesJson = KeyPermissions.fromList(allowedTypes ?? null).toColumn();
   const [key] = await sql<ApiKey[]>`
     INSERT INTO api_keys (id, name, hashed_key, expires_at, rate_limit_per_min, rate_limit_per_day, allowed_types)
     VALUES (${id}, ${name}, ${hashed}, ${expiresAt ?? null}, ${rateLimitPerMin ?? null}, ${rateLimitPerDay ?? null}, ${typesJson})
@@ -299,7 +300,7 @@ export async function listApiKeys(): Promise<(Omit<ApiKeyRow, "allowed_types"> &
   `;
   return rows.map(r => ({
     ...r,
-    allowed_types: r.allowed_types ? JSON.parse(r.allowed_types) as string[] : null,
+    allowed_types: KeyPermissions.fromColumn(r.allowed_types).toList(),
   }));
 }
 
@@ -339,7 +340,7 @@ export async function updateApiKey(
   if ("rate_limit_per_min" in fields) setClauses.push(`rate_limit_per_min = ${p(fields.rate_limit_per_min ?? null)}`);
   if ("rate_limit_per_day" in fields) setClauses.push(`rate_limit_per_day = ${p(fields.rate_limit_per_day ?? null)}`);
   if ("allowed_types"      in fields) {
-    setClauses.push(`allowed_types = ${p(fields.allowed_types != null ? JSON.stringify(fields.allowed_types) : null)}`);
+    setClauses.push(`allowed_types = ${p(KeyPermissions.fromList(fields.allowed_types ?? null).toColumn())}`);
   }
 
   if (setClauses.length === 0) return false;

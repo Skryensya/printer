@@ -1,5 +1,6 @@
-import { createApiKey, listApiKeys, revokeApiKey, deleteApiKey, updateApiKey, verifyApiKey, listKeyStats } from "../db";
-import { PERMISSION_TYPES } from "../permissions";
+import { createApiKey, listApiKeys, revokeApiKey, deleteApiKey, updateApiKey, listKeyStats } from "../db";
+import { PERMISSION_TYPES, KeyPermissions } from "../permissions";
+import { authenticateKey } from "../middleware/auth";
 
 function err(msg: string, status = 400): Response {
   return Response.json({ error: msg }, { status });
@@ -41,7 +42,7 @@ export async function createKeyHandler(req: Request): Promise<Response> {
   );
   const { allowed_types, ...rest } = key as typeof key & { allowed_types: string | null };
   return Response.json({
-    key: { ...rest, allowed_types: allowed_types ? JSON.parse(allowed_types) as string[] : null },
+    key: { ...rest, allowed_types: KeyPermissions.fromColumn(allowed_types).toList() },
     raw,
   }, { status: 201 });
 }
@@ -87,18 +88,13 @@ export async function deleteKeyHandler(_req: Request, id: string): Promise<Respo
 // Self-service: returns the current key's own public metadata.
 // No admin required — the key authenticates itself.
 export async function getKeyMeHandler(req: Request): Promise<Response> {
-  const raw =
-    req.headers.get("X-API-Key") ??
-    req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ??
-    "";
-  if (!raw) return err("Unauthorized", 401);
-  const key = await verifyApiKey(raw);
+  const key = await authenticateKey(req);
   if (!key) return err("Unauthorized", 401);
   return Response.json({
     name:               key.name,
     rate_limit_per_min: key.rate_limit_per_min ?? null,
     rate_limit_per_day: key.rate_limit_per_day ?? null,
-    allowed_types:      key.allowed_types ? JSON.parse(key.allowed_types) as string[] : null,
+    allowed_types:      KeyPermissions.fromColumn(key.allowed_types).toList(),
     expires_at:         key.expires_at ?? null,
   });
 }

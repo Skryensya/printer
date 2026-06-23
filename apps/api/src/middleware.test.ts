@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { resetDbForTest, createApiKey } from "./db";
-import { withServiceAuth, withAdminAuth } from "./middleware/auth";
+import { withServiceAuth, withAdminAuth, withMessageAuth } from "./middleware/auth";
 
 const ok = () => new Response("ok", { status: 200 });
 
@@ -68,6 +68,64 @@ describe("withServiceAuth", () => {
     const handler = withServiceAuth(null, ok);
     const res = await handler(makeReq(raw, "bearer"));
     expect(res.status).toBe(200);
+  });
+});
+
+// ─── withServiceAuth — type allowlist (the permit rule, now centralised) ──────
+
+describe("withServiceAuth allowlist", () => {
+  test("rejects a type the key does not permit with 403", async () => {
+    const { raw } = await createApiKey("svc", undefined, undefined, undefined, ["text"]);
+    const handler = withServiceAuth("image", ok);
+    const res = await handler(makeReq(raw));
+    expect(res.status).toBe(403);
+    const body = await res.json() as { type: string; allowed: string[] };
+    expect(body.type).toBe("image");
+    expect(body.allowed).toEqual(["text"]);
+  });
+
+  test("permits a type on the key's allowlist", async () => {
+    const { raw } = await createApiKey("svc", undefined, undefined, undefined, ["text"]);
+    const res = await withServiceAuth("text", ok)(makeReq(raw));
+    expect(res.status).toBe(200);
+  });
+
+  test("unrestricted key (no allowlist) permits any type", async () => {
+    const { raw } = await createApiKey("svc");
+    const res = await withServiceAuth("image", ok)(makeReq(raw));
+    expect(res.status).toBe(200);
+  });
+});
+
+// ─── withMessageAuth — message OR message_custom + custom-from grant ──────────
+
+describe("withMessageAuth", () => {
+  test("rejects a key without message permission with 403", async () => {
+    const { raw } = await createApiKey("svc", undefined, undefined, undefined, ["text"]);
+    const res = await withMessageAuth(() => ok())(makeReq(raw));
+    expect(res.status).toBe(403);
+  });
+
+  test("message permission grants access, customFromAllowed=false", async () => {
+    const { raw } = await createApiKey("svc", undefined, undefined, undefined, ["message"]);
+    let captured = true;
+    const res = await withMessageAuth((_req, _source, customFromAllowed) => {
+      captured = customFromAllowed;
+      return ok();
+    })(makeReq(raw));
+    expect(res.status).toBe(200);
+    expect(captured).toBe(false);
+  });
+
+  test("message_custom grants customFromAllowed=true", async () => {
+    const { raw } = await createApiKey("svc", undefined, undefined, undefined, ["message_custom"]);
+    let captured = false;
+    const res = await withMessageAuth((_req, _source, customFromAllowed) => {
+      captured = customFromAllowed;
+      return ok();
+    })(makeReq(raw));
+    expect(res.status).toBe(200);
+    expect(captured).toBe(true);
   });
 });
 

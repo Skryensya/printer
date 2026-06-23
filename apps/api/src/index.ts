@@ -12,7 +12,7 @@ import {
 import {
   listWallUsersHandler, createWallUserHandler, deleteWallUserHandler, wallLoginHandler,
 } from "./handlers/wall";
-import { withServiceAuth, withAdminAuth, withMessageAuth, withJobAuth } from "./middleware/auth";
+import { withServiceAuth, withAdminAuth, withMessageAuth, withJobAuth, authenticateKey, extractRaw } from "./middleware/auth";
 import { withCors } from "./middleware/cors";
 import { broadcastToWatchers, pushJobToAgent, startPingInterval, websocketHandlers, getAgentStatus } from "./websocket";
 import { initQueue } from "./queue";
@@ -38,7 +38,8 @@ async function router(req: Request): Promise<Response> {
 
   // ── WebSocket upgrades ──────────────────────────────────────────────────────
   if (path === "/ws/agent" && req.headers.get("upgrade") === "websocket") {
-    const raw = req.headers.get("X-API-Key") ?? url.searchParams.get("key") ?? "";
+    // Agents may present the key via header or (browserless clients) a query param.
+    const raw = extractRaw(req) ?? url.searchParams.get("key") ?? "";
     const key = await verifyApiKey(raw);
     if (!key) return Response.json({ error: "Unauthorized" }, { status: 401 });
     return server.upgrade(req, { data: { role: "agent" } })
@@ -147,8 +148,7 @@ async function router(req: Request): Promise<Response> {
   // Auth'd (so it can't be brute-forced via the public API) but not quota-counted.
   if (path === "/api/v1/wall/login" && method === "POST") {
     return withCors(async (req) => {
-      const raw = req.headers.get("X-API-Key") ?? req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-      if (!(await verifyApiKey(raw))) return Response.json({ error: "Unauthorized" }, { status: 401 });
+      if (!(await authenticateKey(req))) return Response.json({ error: "Unauthorized" }, { status: 401 });
       return wallLoginHandler(req);
     })(req);
   }

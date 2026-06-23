@@ -1,11 +1,14 @@
 import {
   enqueueJob, listPendingJobs, updateJobStatus, getJob,
   incrementRetry, resetStuckJobs, resetJobForRetry, incrementKeyStat,
-  type Job, type JobType,
+  type Job, type JobType, type JobStatus,
 } from "./db";
 import type { JobFailureReason, WatcherEvent } from "@printer/core";
 
 export type BroadcastFn = (msg: WatcherEvent) => void;
+
+// The WatcherEvent variants that carry a single Job (everything but jobs:reset).
+type SingleJobEvent = "job:queued" | "job:printing" | "job:done" | "job:failed" | "job:cancelled";
 
 const MAX_JOB_RETRIES = 2;
 const DISPATCH_INTERVAL_MS = 300;
@@ -25,6 +28,26 @@ export class Queue {
       this.dispatchQueue.push(job);
     }
     this.pump();
+  }
+
+  // ─── Status transition seam ───────────────────────────────────────────────
+  // "Move a Job to a status and tell the Watchers" lives here once. Callers name
+  // the transition; they don't reload the row and re-broadcast by hand.
+
+  private announce(event: SingleJobEvent, job: Job): void {
+    this.broadcast({ event, job: publicJob(job) } as WatcherEvent);
+  }
+
+  private async transition(
+    id: string,
+    status: JobStatus,
+    event: SingleJobEvent,
+    error?: string,
+  ): Promise<Job | null> {
+    await updateJobStatus(id, status, error);
+    const job = await getJob(id);
+    if (job) this.announce(event, job);
+    return job;
   }
 
   private pump(): void {
@@ -47,7 +70,7 @@ export class Queue {
   async enqueue(type: JobType, payload: unknown, source: string): Promise<Job> {
     const job = await enqueueJob(type, payload, source);
     await incrementKeyStat(source, "enqueued");
-    this.broadcast({ event: "job:queued", job: publicJob(job) });
+    this.announce("job:queued", job);
     this.schedule(job);
     return job;
   }
@@ -62,60 +85,46 @@ export class Queue {
   }
 
   async onJobStarted(id: string): Promise<void> {
-    await updateJobStatus(id, "printing");
-    const job = await getJob(id);
-    if (job) this.broadcast({ event: "job:printing", job: publicJob(job) });
+    await this.transition(id, "printing", "job:printing");
   }
 
   async onJobDone(id: string): Promise<void> {
-    await updateJobStatus(id, "done");
-    const job = await getJob(id);
-    if (job) {
-      await incrementKeyStat(job.source, "printed");
-      this.broadcast({ event: "job:done", job: publicJob(job) });
-    }
+    const job = await this.transition(id, "done", "job:done");
+    if (job) await incrementKeyStat(job.source, "printed");
   }
 
   async onJobFailed(id: string, error: string, reason: JobFailureReason = "job_error"): Promise<void> {
     if (reason === "printer_unavailable") {
-      await updateJobStatus(id, "pending");
-      const job = await getJob(id);
-      if (job) this.broadcast({ event: "job:queued", job: publicJob(job) });
+      await this.transition(id, "pending", "job:queued");
       return;
     }
 
     const retries = await incrementRetry(id);
     if (retries < MAX_JOB_RETRIES) {
-      await updateJobStatus(id, "pending");
-      const job = await getJob(id);
-      if (job) {
-        this.broadcast({ event: "job:queued", job: publicJob(job) });
-        this.schedule(job);
-      }
+      const job = await this.transition(id, "pending", "job:queued");
+      if (job) this.schedule(job);
     } else {
-      await updateJobStatus(id, "failed", error);
-      const job = await getJob(id);
-      if (job) {
-        await incrementKeyStat(job.source, "failed");
-        this.broadcast({ event: "job:failed", job: publicJob(job) });
-      }
+      const job = await this.transition(id, "failed", "job:failed", error);
+      if (job) await incrementKeyStat(job.source, "failed");
     }
   }
 
   async onAgentDisconnected(): Promise<void> {
     const changed = await resetStuckJobs();
     if (changed > 0) {
-      this.broadcast({ event: "jobs:reset", jobs: (await listPendingJobs()).map(publicJob) });
+      this.broadcast({ event: "jobs:reset", jobs: (await listPendingJobs()).map(j => publicJob(j)) });
     }
   }
 
   async retryJob(id: string): Promise<boolean> {
     const job = await getJob(id);
     if (!job || job.status === "pending" || job.status === "printing" || job.status === "done") return false;
+    // resetJobForRetry also zeroes retry_count and clears the error, so it can't
+    // go through transition() (which only sets status).
     await resetJobForRetry(id);
     const updated = await getJob(id);
     if (!updated) return false;
-    this.broadcast({ event: "job:queued", job: publicJob(updated) });
+    this.announce("job:queued", updated);
     this.schedule(updated);
     return true;
   }
@@ -123,18 +132,14 @@ export class Queue {
   async cancelJob(id: string): Promise<boolean> {
     const job = await getJob(id);
     if (!job || job.status === "done" || job.status === "cancelled" || job.status === "printing") return false;
-    await updateJobStatus(id, "cancelled");
     this.dispatchQueue = this.dispatchQueue.filter(j => j.id !== id);
-    const updated = await getJob(id);
-    if (!updated) return false;
-    this.broadcast({ event: "job:cancelled", job: publicJob(updated) });
-    return true;
+    return (await this.transition(id, "cancelled", "job:cancelled")) !== null;
   }
 
   async reprintJob(id: string): Promise<Job | null> {
     const job = await getJob(id);
     if (!job || job.status !== "done") return null;
-    return this.enqueue(job.type, JSON.parse(job.payload) as unknown, job.source);
+    return this.enqueue(job.type, jobPayload(job), job.source);
   }
 }
 
@@ -162,9 +167,18 @@ export const retryJob            = (id: string) => q().retryJob(id);
 export const cancelJob           = (id: string) => q().cancelJob(id);
 export const reprintJob          = (id: string) => q().reprintJob(id);
 
-export function publicJob(job: Job) {
+// The Job's stored payload as its parsed object — the one place the JSON-string
+// representation is decoded for consumers that need the raw payload (agent push,
+// reprint). Watcher/HTTP views go through publicJob instead.
+export function jobPayload(job: Job): unknown {
+  return JSON.parse(job.payload);
+}
+
+// `full` returns the unredacted payload (single-job fetch); the default redacts
+// large image base64 for the list/broadcast view.
+export function publicJob(job: Job, full = false) {
   const payload = JSON.parse(job.payload) as Record<string, unknown>;
-  if (job.type === "image" && typeof payload["image"] === "string") {
+  if (!full && job.type === "image" && typeof payload["image"] === "string") {
     payload["image"] = `[base64 ${Math.round(payload["image"].length * 3 / 4 / 1024)} KB]`;
   }
   return {
