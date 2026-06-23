@@ -223,15 +223,22 @@ function CameraCapture({ onCapture, onClose }: {
     };
   }, [facing]);
 
+  // Capture the largest centred 1:2 (width:height) crop from the frame — matches
+  // the framed preview, and suits the tall receipt format.
   function shoot() {
     const v = videoRef.current;
     if (!v || !v.videoWidth) return;
+    const vw = v.videoWidth, vh = v.videoHeight;
+    let cw: number, ch: number;
+    if (vh >= vw * 2) { cw = vw; ch = vw * 2; }  // tall source → limited by width
+    else { ch = vh; cw = vh / 2; }               // wide source → limited by height
+    const sx = (vw - cw) / 2, sy = (vh - ch) / 2;
     const canvas = document.createElement("canvas");
-    canvas.width = v.videoWidth;
-    canvas.height = v.videoHeight;
+    canvas.width = Math.round(cw);
+    canvas.height = Math.round(ch);
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.drawImage(v, 0, 0);
+    ctx.drawImage(v, sx, sy, cw, ch, 0, 0, canvas.width, canvas.height);
     onCapture(canvas.toDataURL("image/jpeg", 0.92));
   }
 
@@ -241,30 +248,50 @@ function CameraCapture({ onCapture, onClose }: {
         <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center text-white">
           <Camera size={28} className="opacity-70" />
           <p className="max-w-xs text-sm opacity-90">{error}</p>
-          <button onClick={onClose} className="rounded-full bg-white/15 px-4 py-2 text-sm active:scale-[0.96]">
+          <button onClick={onClose} className="rounded-full bg-white/15 px-5 py-2.5 text-sm font-medium active:scale-[0.96]">
             Cerrar
           </button>
         </div>
       ) : (
         <>
-          <div className="relative flex-1 overflow-hidden">
-            <video ref={videoRef} playsInline muted
-              className="h-full w-full object-cover"
-              style={{ transform: facing === "user" ? "scaleX(-1)" : undefined }} />
+          {/* Top controls */}
+          <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))]">
             <button onClick={onClose} aria-label="Cerrar"
-              className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-[scale] active:scale-[0.96]">
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-[scale] active:scale-[0.94]">
               <XIcon size={18} />
             </button>
+            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-white/55">papel · 1:2</span>
             <button onClick={() => setFacing(f => (f === "environment" ? "user" : "environment"))}
               aria-label="Cambiar cámara"
-              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-[scale] active:scale-[0.96]">
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-[scale] active:scale-[0.94]">
               <SwitchCamera size={18} />
             </button>
           </div>
-          <div className="flex items-center justify-center bg-black py-7">
+
+          {/* Framed 1:2 preview — exactly what gets captured */}
+          <div className="flex flex-1 items-center justify-center px-4">
+            <div className="relative aspect-[1/2] h-[68vh] max-h-[600px] overflow-hidden rounded-[28px] bg-neutral-900 shadow-2xl ring-1 ring-white/15">
+              {!ready && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center text-white/50">
+                  <Loader2 size={22} className="animate-spin" />
+                </div>
+              )}
+              <video ref={videoRef} playsInline muted
+                className="h-full w-full object-cover"
+                style={{ transform: facing === "user" ? "scaleX(-1)" : undefined }} />
+              {/* corner framing marks */}
+              <span className="pointer-events-none absolute left-3 top-3 h-6 w-6 rounded-tl-md border-l-2 border-t-2 border-white/60" />
+              <span className="pointer-events-none absolute right-3 top-3 h-6 w-6 rounded-tr-md border-r-2 border-t-2 border-white/60" />
+              <span className="pointer-events-none absolute bottom-3 left-3 h-6 w-6 rounded-bl-md border-b-2 border-l-2 border-white/60" />
+              <span className="pointer-events-none absolute bottom-3 right-3 h-6 w-6 rounded-br-md border-b-2 border-r-2 border-white/60" />
+            </div>
+          </div>
+
+          {/* Shutter */}
+          <div className="flex items-center justify-center pb-[max(2rem,env(safe-area-inset-bottom))] pt-2">
             <button onClick={shoot} disabled={!ready} aria-label="Tomar foto"
-              className="flex h-16 w-16 items-center justify-center rounded-full ring-4 ring-white/40 transition-[scale] active:scale-[0.96] disabled:opacity-40">
-              <span className="h-12 w-12 rounded-full bg-white" />
+              className="group flex h-[72px] w-[72px] items-center justify-center rounded-full ring-[3px] ring-white/80 transition-[scale] active:scale-[0.92] disabled:opacity-40">
+              <span className="h-14 w-14 rounded-full bg-white transition-transform group-active:scale-90" />
             </button>
           </div>
         </>
