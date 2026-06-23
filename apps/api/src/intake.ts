@@ -2,7 +2,7 @@ import { enqueue } from "./queue";
 import {
   buildTextPayload, buildTicketPayload, buildTodoPayload, buildQrPayload, buildImagePayload, santiagoTime,
 } from "@printer/core";
-import type { Job } from "./db";
+import { setJobImageUrl, type Job } from "./db";
 import type { PrintTextBody, PrintTicketBody, PrintQrBody, PrintImageBody, PrintTodoBody } from "./types";
 import type { CardData } from "@printer/core";
 import { archiveImage } from "./storage";
@@ -49,13 +49,16 @@ export async function intakeImage(body: unknown, source: string): Promise<Intake
   if (!b?.image) return reject("body.image (base64) is required");
   try { Buffer.from(b.image, "base64"); }
   catch { return reject("body.image must be valid base64"); }
+  const job = await enqueue("image", buildImagePayload(b), source);
   // Archive the full-res original if the caller sent one, else the print bitmap.
-  // R2 in prod, no-op in dev. Fire-and-forget — never blocks the print. The
-  // original is archive-only; it never enters the job payload (keeps the DB small).
+  // R2 in prod, no-op in dev. Fire-and-forget — never blocks the print. When the
+  // upload finishes, attach the public URL to the job (shows in the admin queue).
   const archiveData = b.original ?? b.image;
   const archiveType = b.original ? (b.originalMediaType ?? "image/png") : (b.mediaType ?? "image/png");
-  void archiveImage(archiveData, archiveType, source);
-  return { ok: true, job: await enqueue("image", buildImagePayload(b), source) };
+  void archiveImage(archiveData, archiveType, source).then(url => {
+    if (url) return setJobImageUrl(job.id, url);
+  }).catch(() => {});
+  return { ok: true, job };
 }
 
 export async function intakeTodo(body: unknown, source: string): Promise<IntakeResult> {

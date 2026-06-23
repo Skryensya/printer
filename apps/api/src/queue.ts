@@ -177,5 +177,6 @@ export function publicJob(job: Job) {
     error:       job.error,
     created_at:  job.created_at,
     updated_at:  job.updated_at,
+    image_url:   job.image_url,
   };
 }

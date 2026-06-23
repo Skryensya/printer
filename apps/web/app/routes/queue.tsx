@@ -212,6 +212,14 @@ function JobRow({
             </div>
           )}
 
+          {/* Archived original (R2) */}
+          {job.image_url && (
+            <a href={job.image_url} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline">
+              <ImageIcon size={12} /> Ver original
+            </a>
+          )}
+
           {/* Job ID + retry count */}
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-muted-foreground/40 font-mono">{job.id}</span>

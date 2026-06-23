@@ -18,6 +18,9 @@ export async function migrate(): Promise<void> {
     )
   `;
 
+  // Archived-image URL (R2). Added idempotently for existing deployments.
+  await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS image_url TEXT`;
+
   await sql`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, created_at)`;
 
   await sql`
@@ -157,6 +160,12 @@ export interface Job {
   error:       string | null;
   created_at:  number;
   updated_at:  number;
+  image_url:   string | null; // archived original (R2), set after upload
+}
+
+// Attach the archived-image URL to a job (called after the R2 upload completes).
+export async function setJobImageUrl(id: string, url: string): Promise<void> {
+  await sql`UPDATE jobs SET image_url = ${url} WHERE id = ${id}`;
 }
 
 export async function enqueueJob(type: JobType, payload: unknown, source: string): Promise<Job> {

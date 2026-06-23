@@ -8,6 +8,7 @@ const {
   R2_ACCESS_KEY_ID,
   R2_SECRET_ACCESS_KEY,
   R2_BUCKET,
+  R2_PUBLIC_URL, // public base (r2.dev or custom domain); used to build view links
 } = process.env;
 
 // Configured only when every required var is present (prod). Otherwise null (dev).
@@ -32,8 +33,8 @@ function extFor(mediaType: string): string {
   return "png";
 }
 
-// Archive a base64 image. Returns the object key, or null if storage is off /
-// the upload failed. Never throws — callers can ignore the result.
+// Archive a base64 image. Returns a public URL when R2_PUBLIC_URL is set, else
+// the object key; null if storage is off or the upload failed. Never throws.
 export async function archiveImage(
   base64: string,
   mediaType: string,
@@ -46,7 +47,7 @@ export async function archiveImage(
     const safe = source.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
     const key  = `images/${day}/${safe}/${now.getTime()}-${crypto.randomUUID().slice(0, 8)}.${extFor(mediaType)}`;
     await client.write(key, Buffer.from(base64, "base64"), { type: mediaType });
-    return key;
+    return R2_PUBLIC_URL ? `${R2_PUBLIC_URL.replace(/\/$/, "")}/${key}` : key;
   } catch (e) {
     console.error("[storage] R2 upload failed:", e instanceof Error ? e.message : e);
     return null;

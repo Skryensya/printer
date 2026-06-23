@@ -108,6 +108,7 @@ export interface PrintJob {
   error:       string | null;
   created_at:  number;
   updated_at:  number;
+  image_url?:  string | null; // archived original (R2), image jobs only
 }
 
 // ─── Admin: jobs ──────────────────────────────────────────────────────────────
