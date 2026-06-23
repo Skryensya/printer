@@ -33,7 +33,7 @@ async function tick(): Promise<void> {
     if (result.ok) {
       const img = entry.hasImage ? getImage(entry.id) : undefined;
       if (img) {
-        result = await sendImage(img.data, img.mediaType);
+        result = await sendImage(img.data, img.mediaType, img.original, img.originalMediaType);
         if (result.ok) dropImage(entry.id);
       }
     }
