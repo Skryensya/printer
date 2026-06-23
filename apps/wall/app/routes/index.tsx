@@ -30,6 +30,30 @@ function timeAgo(ts: number): string {
   return `hace ${Math.floor(s / 86400)} d`;
 }
 
+// A short synthesized "ping" — a bright tone that drops and decays. Built with
+// the Web Audio API so there's no asset to load; fired on send (a user gesture,
+// so the audio context is allowed to start).
+function playPing(): void {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1480, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.16);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.45);
+    osc.onended = () => ctx.close();
+  } catch { /* audio unavailable — no-op */ }
+}
+
 // Brand mark: a dot emitting signal rings — the one bit of ambient motion.
 function PulseMark({ shoot = false }: { shoot?: boolean }) {
   return (
@@ -288,6 +312,7 @@ function PingPage() {
         if (fileRef.current) fileRef.current.value = "";
         setCooldown(result.cooldownRemaining);
         setJustPinged(true);
+        playPing();
         setTimeout(() => setJustPinged(false), 700);
         await refresh();
       } else {
@@ -339,7 +364,9 @@ function PingPage() {
 
       {/* Hero — one line */}
       <div className="mt-12 space-y-2.5">
-        <h1 className="font-display text-4xl sm:text-5xl tracking-tight">Mándame un ping.</h1>
+        <h1 className="font-display text-4xl sm:text-5xl tracking-tight">
+          Mándame un <span style={{ color: "var(--signal)" }}>ping</span>.
+        </h1>
         <p className="text-[15px] leading-relaxed text-muted-foreground">
           Lo escribes y sale impreso en la impresora de mi escritorio.
         </p>
@@ -407,7 +434,7 @@ function PingPage() {
             <Button type="submit" disabled={!canSend} size="lg"
               className="shrink-0 gap-2 rounded-full px-5 transition-transform active:scale-[0.95]">
               {sending ? <Loader2 size={15} className="animate-spin" /> : <ArrowUp size={15} />}
-              {sending ? "Enviando…" : "Imprimir"}
+              {sending ? "enviando…" : "ping"}
             </Button>
           </div>
         </div>

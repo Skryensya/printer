@@ -149,22 +149,22 @@
        distance (transparent pushed to ~90%) — soft edges, more volume. The mid
        stop keeps the falloff gradual so it reads round, not like a hard disc. */
     background-image:
-      radial-gradient(105% 90% at 6% 4%,   color-mix(in oklch, #3aa99f 44%, transparent) 0%, color-mix(in oklch, #3aa99f 18%, transparent) 40%, transparent 88%),
-      radial-gradient(100% 88% at 94% 6%,  color-mix(in oklch, #8b7ec8 42%, transparent) 0%, color-mix(in oklch, #8b7ec8 16%, transparent) 42%, transparent 88%),
-      radial-gradient(102% 90% at 94% 96%, color-mix(in oklch, #da702c 42%, transparent) 0%, color-mix(in oklch, #da702c 16%, transparent) 42%, transparent 90%),
-      radial-gradient(102% 90% at 6% 96%,  color-mix(in oklch, #879a39 36%, transparent) 0%, color-mix(in oklch, #879a39 14%, transparent) 42%, transparent 90%),
-      radial-gradient(95% 82% at 50% 52%,  color-mix(in oklch, #ce5d97 28%, transparent) 0%, transparent 82%);
-    animation: mesh-drift 34s ease-in-out infinite alternate;
+      radial-gradient(105% 90% at 6% 4%,   color-mix(in oklch, #3aa99f 26%, transparent) 0%, color-mix(in oklch, #3aa99f 11%, transparent) 42%, transparent 88%),
+      radial-gradient(100% 88% at 94% 6%,  color-mix(in oklch, #8b7ec8 24%, transparent) 0%, color-mix(in oklch, #8b7ec8 10%, transparent) 44%, transparent 88%),
+      radial-gradient(102% 90% at 94% 96%, color-mix(in oklch, #da702c 24%, transparent) 0%, color-mix(in oklch, #da702c 10%, transparent) 44%, transparent 90%),
+      radial-gradient(102% 90% at 6% 96%,  color-mix(in oklch, #879a39 20%, transparent) 0%, color-mix(in oklch, #879a39  9%, transparent) 44%, transparent 90%),
+      radial-gradient(95% 82% at 50% 52%,  color-mix(in oklch, #ce5d97 15%, transparent) 0%, transparent 82%);
+    animation: mesh-drift 40s ease-in-out infinite alternate;
     will-change: transform;
   }
   .dark body::before {
     /* Brighter inks, lower alpha, so they glow on dark paper without muddying. */
     background-image:
-      radial-gradient(105% 90% at 6% 4%,   color-mix(in oklch, #5abdac 32%, transparent) 0%, color-mix(in oklch, #5abdac 13%, transparent) 40%, transparent 88%),
-      radial-gradient(100% 88% at 94% 6%,  color-mix(in oklch, #b3a4e8 30%, transparent) 0%, color-mix(in oklch, #b3a4e8 12%, transparent) 42%, transparent 88%),
-      radial-gradient(102% 90% at 94% 96%, color-mix(in oklch, #ec8b49 30%, transparent) 0%, color-mix(in oklch, #ec8b49 12%, transparent) 42%, transparent 90%),
-      radial-gradient(102% 90% at 6% 96%,  color-mix(in oklch, #a8c050 26%, transparent) 0%, color-mix(in oklch, #a8c050 11%, transparent) 42%, transparent 90%),
-      radial-gradient(95% 82% at 50% 52%,  color-mix(in oklch, #d56fa3 24%, transparent) 0%, transparent 82%);
+      radial-gradient(105% 90% at 6% 4%,   color-mix(in oklch, #5abdac 20%, transparent) 0%, color-mix(in oklch, #5abdac  9%, transparent) 42%, transparent 88%),
+      radial-gradient(100% 88% at 94% 6%,  color-mix(in oklch, #b3a4e8 18%, transparent) 0%, color-mix(in oklch, #b3a4e8  8%, transparent) 44%, transparent 88%),
+      radial-gradient(102% 90% at 94% 96%, color-mix(in oklch, #ec8b49 18%, transparent) 0%, color-mix(in oklch, #ec8b49  8%, transparent) 44%, transparent 90%),
+      radial-gradient(102% 90% at 6% 96%,  color-mix(in oklch, #a8c050 15%, transparent) 0%, color-mix(in oklch, #a8c050  7%, transparent) 44%, transparent 90%),
+      radial-gradient(95% 82% at 50% 52%,  color-mix(in oklch, #d56fa3 13%, transparent) 0%, transparent 82%);
   }
 
   /* Faint film grain over the mesh — breaks gradient banding and gives the wash
