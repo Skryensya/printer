@@ -8,7 +8,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { Printer, Loader2, KeyRound, ListOrdered, LayoutGrid, BookOpen, Users } from "lucide-react";
+import { ChevronRight, Loader2, KeyRound, ListOrdered, LayoutGrid, BookOpen, Users } from "lucide-react";
 import { getAgentStatus, type AgentStatus } from "~/api";
 import { fetchSessionFn, logoutFn } from "~/session";
 import "~/styles.css";
@@ -168,8 +168,8 @@ function SiteHeader({ onLogout }: { onLogout: () => void }) {
   return (
     <header className="relative flex-shrink-0 border-b border-border h-12 bg-secondary/60">
       <div className="absolute left-0 top-0 h-full px-5 flex items-center gap-2">
-        <Printer size={16} className="text-primary" />
         <span className="font-bold text-sm tracking-tight">Printer Admin</span>
+        <ChevronRight size={14} className="text-muted-foreground/60" />
         <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">POS-58</span>
       </div>
       <div className="h-full max-w-4xl mx-auto px-6 flex items-center justify-between">
@@ -229,8 +229,8 @@ function RootComponent() {
         <div className="min-h-screen flex flex-col bg-background">
           <div className="border-b border-border h-12 flex-shrink-0 flex items-center px-6 bg-secondary/60">
             <div className="max-w-4xl w-full mx-auto flex items-center gap-2">
-              <Printer size={15} className="text-primary" />
               <span className="font-bold text-sm tracking-tight">Printer Admin</span>
+              <ChevronRight size={14} className="text-muted-foreground/60" />
               <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">POS-58</span>
               <span className="mx-2 text-border text-xs">·</span>
               <span className="text-xs text-muted-foreground">API Reference</span>
