@@ -5,6 +5,7 @@ import {
 import type { Job } from "./db";
 import type { PrintTextBody, PrintTicketBody, PrintQrBody, PrintImageBody, PrintTodoBody } from "./types";
 import type { CardData } from "@printer/core";
+import { archiveImage } from "./storage";
 
 // ─── Result type ──────────────────────────────────────────────────────────────
 // A validated, enqueued Job on success; a ready-to-return 4xx Response on failure.
@@ -48,6 +49,8 @@ export async function intakeImage(body: unknown, source: string): Promise<Intake
   if (!b?.image) return reject("body.image (base64) is required");
   try { Buffer.from(b.image, "base64"); }
   catch { return reject("body.image must be valid base64"); }
+  // Archive to R2 in prod (no-op in dev). Fire-and-forget — never blocks the print.
+  void archiveImage(b.image, b.mediaType ?? "image/png", source);
   return { ok: true, job: await enqueue("image", buildImagePayload(b), source) };
 }
 
