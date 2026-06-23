@@ -127,7 +127,7 @@ function PingSlip({ id, message, from, createdAt, delay, hasImage }: {
     if (!hasImage) return;
     let on = true;
     fetchPhotoFn({ data: { id } })
-      .then(r => { if (on && r) setPhoto(r.dataUrl); })
+      .then(r => { if (on && r) setPhoto(r.src); })
       .catch(() => { /* leave the placeholder */ });
     return () => { on = false; };
   }, [id, hasImage]);

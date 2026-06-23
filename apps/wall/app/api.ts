@@ -79,8 +79,9 @@ export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): P
 
 export const fetchPhotoFn = createServerFn({ method: "GET" })
   .validator((d: { id: string }) => d)
-  .handler(async ({ data }): Promise<{ dataUrl: string } | null> => {
+  .handler(async ({ data }): Promise<{ src: string } | null> => {
     const { getEntry, getStoredPhoto } = await import("./server/store");
+    const { getJobImageUrl } = await import("./server/printer");
     const { currentUser } = await import("./server/auth");
 
     const entry = getEntry(data.id);
@@ -92,8 +93,14 @@ export const fetchPhotoFn = createServerFn({ method: "GET" })
       : entry.ip === clientIp();
     if (!owns) return null;
 
+    // Prefer the R2 archive (full-res original). Falls back to the local 384px
+    // thumbnail while the upload is still in flight, or when R2 is off (dev).
+    if (entry.imageJobId) {
+      const url = await getJobImageUrl(entry.imageJobId);
+      if (url) return { src: url };
+    }
     const b64 = getStoredPhoto(data.id);
-    return b64 ? { dataUrl: `data:image/png;base64,${b64}` } : null;
+    return b64 ? { src: `data:image/png;base64,${b64}` } : null;
   });
 
 // ─── submitMessage ──────────────────────────────────────────────────────────

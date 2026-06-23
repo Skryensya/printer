@@ -34,7 +34,11 @@ async function tick(): Promise<void> {
       const img = entry.hasImage ? getImage(entry.id) : undefined;
       if (img) {
         result = await sendImage(img.data, img.mediaType, img.original, img.originalMediaType);
-        if (result.ok) dropImage(entry.id);
+        if (result.ok) {
+          // Remember the image job so we can read its R2 url later.
+          if (result.jobId) updateEntry(entry.id, { imageJobId: result.jobId });
+          dropImage(entry.id);
+        }
       }
     }
 

@@ -21,7 +21,8 @@ export interface QueueEntry {
   status:    EntryStatus;
   createdAt: number;
   printedAt: number | null;
-  jobId:     string | null; // id returned by the printer API
+  jobId:     string | null;      // message print job id
+  imageJobId: string | null;     // image print job id — used to read its R2 url
   error:     string | null;
 }
 
@@ -172,11 +173,12 @@ export function enqueue(
     ip,
     username,
     hasImage:  !!image,
-    status:    "pending",
-    createdAt: Date.now(),
-    printedAt: null,
-    jobId:     null,
-    error:     null,
+    status:     "pending",
+    createdAt:  Date.now(),
+    printedAt:  null,
+    jobId:      null,
+    imageJobId: null,
+    error:      null,
   };
   if (image) {
     pendingImages.set(entry.id, image);   // full payload to print (dropped after)

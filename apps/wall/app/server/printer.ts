@@ -13,6 +13,23 @@ export interface SendResult {
   error:  string | null;
 }
 
+// Read a print job's archived-image URL (set by the API after the R2 upload).
+// The wall key is source-scoped, so it can only read its own jobs. Null until
+// the upload finishes, or if R2 isn't configured.
+export async function getJobImageUrl(jobId: string): Promise<string | null> {
+  if (!config.apiKey) return null;
+  try {
+    const res = await fetch(`${config.apiUrl}/api/v1/jobs/${jobId}`, {
+      headers: { "X-API-Key": config.apiKey },
+    });
+    if (!res.ok) return null;
+    const body = await res.json() as { job?: { image_url?: string | null } };
+    return body.job?.image_url ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function num(h: Headers, name: string): number | null {
   const v = h.get(name);
   if (v === null) return null;
