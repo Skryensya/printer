@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Sun, Moon, LogOut, ArrowDown, ImagePlus, Camera, SwitchCamera, X as XIcon, Trash2 } from "lucide-react";
+import { Loader2, Sun, Moon, LogOut, ChevronRight, ImagePlus, Camera, SwitchCamera, X as XIcon, Trash2 } from "lucide-react";
 import { fetchWallFn, submitMessageFn, fetchPhotoFn, hidePingFn, type WallSnapshot } from "~/api";
 import { loginFn, logoutFn } from "~/session";
 import { getRecaptchaToken } from "~/lib/recaptcha";
@@ -454,8 +454,8 @@ function PingPage() {
       <header className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2">
           <PulseMark shoot={justPinged} />
-          <span className="font-display text-lg font-semibold tracking-tight lowercase">
-            ping<span className="text-muted-foreground">.allison.sh</span>
+          <span className="font-display text-lg font-semibold tracking-tight">
+            Ping<span className="text-muted-foreground">.allison.sh</span>
           </span>
         </span>
         <div className="flex items-center gap-1">
@@ -477,7 +477,7 @@ function PingPage() {
       {/* Hero — one line */}
       <div className="mt-12 space-y-2.5">
         <h1 className="font-display text-4xl sm:text-5xl tracking-tight">
-          Mándame un <span style={{ color: "var(--signal)" }}>ping</span>.
+          Mándame un <span style={{ color: "var(--signal)" }}>Ping</span>.
         </h1>
         <p className="text-[15px] leading-relaxed text-foreground/80 text-pretty">
           Lo que mandes sale impreso como una boleta en mi escritorio.{" "}
@@ -562,8 +562,8 @@ function PingPage() {
             {nearLimit && <CountArc used={message.length} />}
             <Button type="submit" disabled={!canSend} size="lg"
               className="shrink-0 gap-2 rounded-full px-5 transition-transform active:scale-[0.95]">
-              {sending ? <Loader2 size={15} className="animate-spin" /> : <ArrowDown size={15} />}
-              {sending ? "enviando…" : "ping"}
+              {sending ? "enviando…" : "Ping"}
+              {sending ? <Loader2 size={15} className="animate-spin" /> : <ChevronRight size={15} />}
             </Button>
           </div>
         </div>
