@@ -1,6 +1,6 @@
 import { healthHandler } from "./handlers/health";
 import {
-  printTextHandler, printTicketHandler, printTodoHandler,
+  printTextHandler, printTicketHandler, printTodoHandler, printQrHandler,
   printMessageHandler, printImageHandler, printBordersHandler, printTestHandler,
 } from "./handlers/print";
 import {
@@ -85,6 +85,7 @@ async function router(req: Request): Promise<Response> {
       "/api/v1/print/text":    { type: "text",    fn: printTextHandler    },
       "/api/v1/print/ticket":  { type: "ticket",  fn: printTicketHandler  },
       "/api/v1/print/todo":    { type: "todo",    fn: printTodoHandler    },
+      "/api/v1/print/qr":      { type: "qr",      fn: printQrHandler      },
       "/api/v1/print/image":   { type: "image",   fn: printImageHandler   },
       "/api/v1/print/borders": { type: "borders", fn: printBordersHandler },
       "/api/v1/print/test":    { type: "test",    fn: printTestHandler    },

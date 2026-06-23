@@ -1,5 +1,5 @@
 import {
-  intakeText, intakeTicket, intakeTodo, intakeImage, intakeMessage, type IntakeResult,
+  intakeText, intakeTicket, intakeTodo, intakeQr, intakeImage, intakeMessage, type IntakeResult,
 } from "../intake";
 import { enqueue } from "../queue";
 
@@ -34,6 +34,7 @@ const printJson =
 export const printTextHandler   = printJson(intakeText);
 export const printTicketHandler = printJson(intakeTicket);
 export const printTodoHandler   = printJson(intakeTodo);
+export const printQrHandler     = printJson(intakeQr);
 export const printImageHandler  = printJson(intakeImage);
 
 // Message carries an extra grant (customFromAllowed), so it keeps its own arm.
