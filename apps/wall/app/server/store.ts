@@ -5,7 +5,7 @@
 // per-IP cooldown can't be reset by bouncing the process. A single long-lived
 // node server owns this module, so a plain module-level singleton is correct.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "./config";
 
@@ -38,6 +38,41 @@ export function getImage(id: string): PendingImage | undefined {
 
 export function dropImage(id: string): void {
   pendingImages.delete(id);
+}
+
+// ─── Persisted photo thumbnails ───────────────────────────────────────────────
+// The 384px print bitmap is saved to disk (as a PNG file, NOT in state.json) so
+// the sender can see what they printed in their history. Kept until the entry is
+// evicted from the queue. Always PNG (the composer renders the bitmap as PNG).
+
+function photosDir(): string {
+  return join(config.dataDir, "photos");
+}
+
+function savePhoto(id: string, base64: string): void {
+  try {
+    mkdirSync(photosDir(), { recursive: true });
+    writeFileSync(join(photosDir(), `${id}.png`), Buffer.from(base64, "base64"));
+  } catch (e) {
+    console.error("[wall] failed to save photo:", e);
+  }
+}
+
+function deletePhoto(id: string): void {
+  try { unlinkSync(join(photosDir(), `${id}.png`)); } catch { /* already gone */ }
+}
+
+// The saved print bitmap as base64, or null if there isn't one.
+export function getStoredPhoto(id: string): string | null {
+  try {
+    const p = join(photosDir(), `${id}.png`);
+    if (!existsSync(p)) return null;
+    return readFileSync(p).toString("base64");
+  } catch { return null; }
+}
+
+export function getEntry(id: string): QueueEntry | undefined {
+  return getState().queue.find(e => e.id === id);
 }
 
 // What we know about how much the API will still let us send. `null` for a
@@ -143,11 +178,17 @@ export function enqueue(
     jobId:     null,
     error:     null,
   };
-  if (image) pendingImages.set(entry.id, image);
+  if (image) {
+    pendingImages.set(entry.id, image);   // full payload to print (dropped after)
+    savePhoto(entry.id, image.data);       // 384px thumbnail kept for viewing
+  }
   const s = getState();
   s.queue.unshift(entry);
   if (s.queue.length > MAX_QUEUE) {
-    for (const dropped of s.queue.slice(MAX_QUEUE)) pendingImages.delete(dropped.id);
+    for (const dropped of s.queue.slice(MAX_QUEUE)) {
+      pendingImages.delete(dropped.id);
+      deletePhoto(dropped.id);
+    }
     s.queue.length = MAX_QUEUE;
   }
   scheduleSave();

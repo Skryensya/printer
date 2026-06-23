@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Loader2, Sun, Moon, LogOut, ArrowUp, ImagePlus, X as XIcon } from "lucide-react";
-import { fetchWallFn, submitMessageFn, type WallSnapshot } from "~/api";
+import { fetchWallFn, submitMessageFn, fetchPhotoFn, type WallSnapshot } from "~/api";
 import { loginFn, logoutFn } from "~/session";
 import { getRecaptchaToken } from "~/lib/recaptcha";
 import { Button } from "~/components/ui/button";
@@ -116,10 +116,22 @@ function LoginPanel({ onDone }: { onDone: () => void }) {
   );
 }
 
-function PingSlip({ message, from, createdAt, delay, hasImage }: {
-  message: string; from: string; createdAt: number; delay: number; hasImage: boolean;
+function PingSlip({ id, message, from, createdAt, delay, hasImage }: {
+  id: string; message: string; from: string; createdAt: number; delay: number; hasImage: boolean;
 }) {
   const clock = new Date(createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const [photo, setPhoto] = useState<string | null>(null);
+
+  // Lazily pull the photo for this ping (owner-scoped on the server).
+  useEffect(() => {
+    if (!hasImage) return;
+    let on = true;
+    fetchPhotoFn({ data: { id } })
+      .then(r => { if (on && r) setPhoto(r.dataUrl); })
+      .catch(() => { /* leave the placeholder */ });
+    return () => { on = false; };
+  }, [id, hasImage]);
+
   return (
     <article
       className="ping-rise rounded-xl border border-border bg-card py-3"
@@ -135,9 +147,16 @@ function PingSlip({ message, from, createdAt, delay, hasImage }: {
 
       {message && <p className="px-4 text-[15px] leading-relaxed whitespace-pre-wrap break-words">{message}</p>}
       {hasImage && (
-        <p className={`px-4 inline-flex items-center gap-1.5 text-[12px] text-muted-foreground ${message ? "mt-2" : ""}`}>
-          <ImagePlus size={13} /> con foto
-        </p>
+        <div className={`px-4 ${message ? "mt-2.5" : ""}`}>
+          {photo ? (
+            <img src={photo} alt="foto enviada"
+              className="w-full rounded-lg border border-border" />
+          ) : (
+            <div className="flex aspect-[4/3] items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground/60">
+              <ImagePlus size={18} className="animate-pulse" />
+            </div>
+          )}
+        </div>
       )}
 
       <hr className="perf mx-4 my-2.5" />
@@ -373,7 +392,7 @@ function PingPage() {
             {user ? "Tu historial" : "Tus pings"}
           </h2>
           {snapshot.items.map((item, i) => (
-            <PingSlip key={item.id} message={item.message} from={item.from}
+            <PingSlip key={item.id} id={item.id} message={item.message} from={item.from}
               createdAt={item.createdAt} delay={Math.min(i * 50, 250)} hasImage={item.hasImage} />
           ))}
         </section>

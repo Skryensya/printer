@@ -72,6 +72,30 @@ export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): P
   };
 });
 
+// ─── fetchPhoto ───────────────────────────────────────────────────────────────
+// Returns the print bitmap for one of the viewer's OWN pings, as a data URL.
+// Ownership is enforced server-side: account pings are visible only to that
+// account; anonymous pings only to the same IP. Returns null otherwise.
+
+export const fetchPhotoFn = createServerFn({ method: "GET" })
+  .validator((d: { id: string }) => d)
+  .handler(async ({ data }): Promise<{ dataUrl: string } | null> => {
+    const { getEntry, getStoredPhoto } = await import("./server/store");
+    const { currentUser } = await import("./server/auth");
+
+    const entry = getEntry(data.id);
+    if (!entry || !entry.hasImage) return null;
+
+    const user = await currentUser();
+    const owns = entry.username
+      ? !!user && user.username === entry.username
+      : entry.ip === clientIp();
+    if (!owns) return null;
+
+    const b64 = getStoredPhoto(data.id);
+    return b64 ? { dataUrl: `data:image/png;base64,${b64}` } : null;
+  });
+
 // ─── submitMessage ──────────────────────────────────────────────────────────
 
 export const submitMessageFn = createServerFn({ method: "POST" })
