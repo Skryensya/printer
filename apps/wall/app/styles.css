@@ -106,7 +106,7 @@
   --secondary-foreground: #cecdc3;
 
   --muted:                #1c1b1a;
-  --muted-foreground:     #878580;
+  --muted-foreground:     #9f9d96; /* Flexoki base-400 — lighter than 500 for contrast on dark */
 
   --accent:               #282726;
   --accent-foreground:    #cecdc3;
