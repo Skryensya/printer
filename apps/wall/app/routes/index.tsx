@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Sun, Moon, LogOut, ArrowUp, ImagePlus, X as XIcon, Trash2 } from "lucide-react";
+import { Loader2, Sun, Moon, LogOut, ArrowUp, ImagePlus, Camera, X as XIcon, Trash2 } from "lucide-react";
 import { fetchWallFn, submitMessageFn, fetchPhotoFn, hidePingFn, type WallSnapshot } from "~/api";
 import { loginFn, logoutFn } from "~/session";
 import { getRecaptchaToken } from "~/lib/recaptcha";
@@ -204,6 +204,7 @@ function PingPage() {
     original: string; originalMediaType: string;
   } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const user = snapshot.user;
   const mountedAt = useRef(Date.now());
@@ -351,8 +352,9 @@ function PingPage() {
         <h1 className="font-display text-4xl sm:text-5xl tracking-tight">
           Mándame un <span style={{ color: "var(--signal)" }}>ping</span>.
         </h1>
-        <p className="text-[15px] leading-relaxed text-muted-foreground">
-          Lo escribes y sale impreso en la impresora de mi escritorio.
+        <p className="text-[15px] leading-relaxed text-muted-foreground text-pretty">
+          Lo escribes y, un segundo después, sale en papel en la impresora de mi
+          escritorio. <span className="text-foreground">Lo voy a leer.</span>
         </p>
       </div>
 
@@ -400,15 +402,31 @@ function PingPage() {
           <div className="flex min-w-0 items-center gap-3">
             {user && !photo && (
               <>
+                {/* Gallery / file picker */}
                 <input ref={fileRef} type="file" accept="image/*" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) handlePickFile(f); e.target.value = ""; }} />
-                <button type="button" onClick={() => fileRef.current?.click()} disabled={sending || processing}
-                  className="group inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-[color,background-color,border-color,scale] hover:border-ring/40 hover:text-foreground active:scale-[0.96] disabled:opacity-50">
-                  {processing
-                    ? <Loader2 size={15} className="animate-spin" />
-                    : <ImagePlus size={15} className="transition-transform group-hover:-translate-y-px" />}
-                  {processing ? "Cargando…" : "Foto"}
-                </button>
+                {/* Camera capture — opens the rear camera directly on mobile */}
+                <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handlePickFile(f); e.target.value = ""; }} />
+                {processing ? (
+                  <span className="inline-flex h-9 items-center gap-1.5 px-1 text-xs text-muted-foreground">
+                    <Loader2 size={15} className="animate-spin" /> Cargando…
+                  </span>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => cameraRef.current?.click()} disabled={sending}
+                      aria-label="Tomar una foto"
+                      className="group inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-[color,background-color,border-color,scale] hover:border-ring/40 hover:text-foreground active:scale-[0.96] disabled:opacity-50">
+                      <Camera size={15} className="transition-transform group-hover:-translate-y-px" />
+                      Cámara
+                    </button>
+                    <button type="button" onClick={() => fileRef.current?.click()} disabled={sending}
+                      aria-label="Adjuntar una foto"
+                      className="group inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-[color,background-color,border-color,scale] hover:border-ring/40 hover:text-foreground active:scale-[0.96] disabled:opacity-50">
+                      <ImagePlus size={15} className="transition-transform group-hover:-translate-y-px" />
+                    </button>
+                  </>
+                )}
               </>
             )}
             {hint && <span className="font-mono text-xs text-muted-foreground [font-variant-numeric:tabular-nums]">{hint}</span>}
