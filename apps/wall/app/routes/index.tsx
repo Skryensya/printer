@@ -483,7 +483,7 @@ function PingPage() {
         <p className="text-[15px] leading-relaxed text-foreground/80 text-pretty">
           Lo que mandes sale impreso como una boleta en mi escritorio.{" "}
           <span
-            onMouseEnter={() => { void playSound(uChatScrollButtonSound.dataUri, { volume: 0.5, playbackRate: 0.75 }).catch(() => {}); }}
+            onMouseEnter={() => { void playSound(uChatScrollButtonSound.dataUri, { volume: 0.5, playbackRate: 0.25 }).catch(() => {}); }}
             className="cursor-default font-mono font-bold italic text-foreground transition-colors hover:text-[var(--signal)]"
           >
             zzzt
