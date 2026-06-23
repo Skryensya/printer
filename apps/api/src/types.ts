@@ -22,6 +22,10 @@ export interface PrintImageBody {
   image: string;
   mediaType?: string;
   effect?: ImageEffect;
+  // Optional full-resolution source to archive instead of the print bitmap.
+  // Archived only (R2); never stored in the job payload.
+  original?: string;
+  originalMediaType?: string;
 }
 
 export interface PrintTodoBody {

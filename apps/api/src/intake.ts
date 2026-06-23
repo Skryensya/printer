@@ -49,8 +49,12 @@ export async function intakeImage(body: unknown, source: string): Promise<Intake
   if (!b?.image) return reject("body.image (base64) is required");
   try { Buffer.from(b.image, "base64"); }
   catch { return reject("body.image must be valid base64"); }
-  // Archive to R2 in prod (no-op in dev). Fire-and-forget — never blocks the print.
-  void archiveImage(b.image, b.mediaType ?? "image/png", source);
+  // Archive the full-res original if the caller sent one, else the print bitmap.
+  // R2 in prod, no-op in dev. Fire-and-forget — never blocks the print. The
+  // original is archive-only; it never enters the job payload (keeps the DB small).
+  const archiveData = b.original ?? b.image;
+  const archiveType = b.original ? (b.originalMediaType ?? "image/png") : (b.mediaType ?? "image/png");
+  void archiveImage(archiveData, archiveType, source);
   return { ok: true, job: await enqueue("image", buildImagePayload(b), source) };
 }
 

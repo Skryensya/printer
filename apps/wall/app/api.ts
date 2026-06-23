@@ -25,8 +25,9 @@ export interface SubmitInput {
   recaptchaToken: string;
   website:        string;  // honeypot — real users leave this empty
   elapsedMs:      number;  // time on the form — bots submit near-instantly
-  // Optional photo (logged-in accounts only). Pre-scaled base64 PNG, no data: prefix.
-  image?:         { data: string; mediaType: string } | null;
+  // Optional photo (logged-in accounts only). `data` = 384px print bitmap;
+  // `original` = the full-res file, archived (not printed).
+  image?:         { data: string; mediaType: string; original?: string; originalMediaType?: string } | null;
 }
 
 export type SubmitResult =
@@ -94,14 +95,19 @@ export const submitMessageFn = createServerFn({ method: "POST" })
       }
     }
 
-    // 2. Validate. Photos are a logged-in-only perk; cap the payload.
+    // 2. Validate. Photos are a logged-in-only perk; cap the payloads.
     const message = data.message.trim();
-    let image: { data: string; mediaType: string } | null = null;
+    let image: { data: string; mediaType: string; original?: string; originalMediaType?: string } | null = null;
     if (user && data.image?.data) {
       if (data.image.data.length > 1_500_000) {
         return { ok: false, error: "La imagen es muy grande" };
       }
-      image = { data: data.image.data, mediaType: data.image.mediaType || "image/png" };
+      // The full-res original is archived only; allow it to be larger.
+      const original = data.image.original && data.image.original.length <= 12_000_000 ? data.image.original : undefined;
+      image = {
+        data: data.image.data, mediaType: data.image.mediaType || "image/png",
+        original, originalMediaType: data.image.originalMediaType || "image/png",
+      };
     }
     // A logged-in user may send just a photo; otherwise text is required.
     if (!message && !image) return { ok: false, error: "El mensaje no puede estar vacío" };

@@ -84,6 +84,9 @@
   --input:                #cecdc3;
   --input-bg:             #fffcf0;
   --ring:                 #100f0f;
+
+  /* Signal accent — the "ping" colour. Flexoki cyan. */
+  --signal:               #24837b;
 }
 
 /* ─── Dark theme — Flexoki dark ───────────────────────────────────────────── */
@@ -114,6 +117,9 @@
   --input:                #343331;
   --input-bg:             #1c1b1a;
   --ring:                 #cecdc3;
+
+  /* Signal accent — lighter cyan for dark paper. */
+  --signal:               #5abdac;
 }
 
 /* ─── Base ────────────────────────────────────────────────────────────────── */
@@ -122,14 +128,75 @@
     @apply border-border outline-ring/40;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Subtle two-hue wash: a signal-tinted glow up top, a warm amber pool
+       bottom-right, over the paper base. Fixed so it never scrolls away. */
+    background:
+      radial-gradient(90% 55% at 50% -8%,  color-mix(in oklch, var(--signal) 14%, transparent), transparent 70%),
+      radial-gradient(75% 50% at 92% 108%, color-mix(in oklch, var(--color-amber) 10%, transparent), transparent 72%),
+      var(--background);
+    background-attachment: fixed;
   }
   h1, h2, h3 {
     font-family: var(--font-display);
     font-weight: 600;
     text-wrap: balance;
   }
+}
+
+/* ─── Ping: signal pulse + receipt motifs ─────────────────────────────────── */
+/* A "ping" is a signal sent out that returns as something physical. The pulse
+   rings echo that; the slips echo the paper it prints on. */
+
+@keyframes ping-ring {
+  0%   { transform: scale(0.55); opacity: 0.5; }
+  100% { transform: scale(2.4);  opacity: 0; }
+}
+@keyframes ping-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.12); }
+}
+@keyframes ping-rise {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.99); }
+  100% { opacity: 1; transform: translateY(0)   scale(1); }
+}
+@keyframes ping-shoot {
+  0%   { transform: scale(0.4); opacity: 0.7; }
+  100% { transform: scale(3);   opacity: 0; }
+}
+
+/* Concentric rings emanating from the brand mark — tinted with the signal hue. */
+.ping-rings > span {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1.5px solid var(--signal);
+  animation: ping-ring 2.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.ping-rings > span:nth-child(2) { animation-delay: 0.9s; }
+.ping-rings > span:nth-child(3) { animation-delay: 1.8s; }
+
+.ping-dot { animation: ping-breathe 2.8s ease-in-out infinite; }
+
+/* One-shot ripple fired on a successful send. */
+.ping-shoot { animation: ping-shoot 0.7s ease-out forwards; }
+
+/* Staggered entrance for slips. */
+.ping-rise { animation: ping-rise 0.45s cubic-bezier(0, 0, 0.2, 1) both; }
+
+/* Dashed perforation line, like a tear-off receipt. */
+.perf {
+  border: 0;
+  border-top: 1.5px dashed var(--border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ping-rings > span,
+  .ping-dot,
+  .ping-shoot,
+  .ping-rise { animation: none !important; }
+  .ping-rings > span { opacity: 0; }
 }

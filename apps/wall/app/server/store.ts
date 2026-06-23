@@ -27,10 +27,12 @@ export interface QueueEntry {
 
 // Attached photos live in memory only — NOT persisted to the JSON state file
 // (base64 would bloat it). They drain within seconds; a restart mid-flight just
-// drops the unsent photo, which is acceptable.
-const pendingImages = new Map<string, { data: string; mediaType: string }>();
+// drops the unsent photo, which is acceptable. `original` is the full-res file
+// to archive (the API stores it); `data` is the 384px bitmap to print.
+type PendingImage = { data: string; mediaType: string; original?: string; originalMediaType?: string };
+const pendingImages = new Map<string, PendingImage>();
 
-export function getImage(id: string): { data: string; mediaType: string } | undefined {
+export function getImage(id: string): PendingImage | undefined {
   return pendingImages.get(id);
 }
 
@@ -126,7 +128,7 @@ export function clearCooldown(ip: string): void {
 export function enqueue(
   message: string, from: string, ip: string,
   username: string | null = null,
-  image: { data: string; mediaType: string } | null = null,
+  image: PendingImage | null = null,
 ): QueueEntry {
   const entry: QueueEntry = {
     id:        crypto.randomUUID(),

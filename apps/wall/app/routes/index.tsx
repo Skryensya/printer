@@ -1,13 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Printer, Loader2, Sun, Moon, LogOut, ArrowUp, ImagePlus, X as XIcon } from "lucide-react";
+import { Loader2, Sun, Moon, LogOut, ArrowUp, ImagePlus, X as XIcon } from "lucide-react";
 import { fetchWallFn, submitMessageFn, type WallSnapshot } from "~/api";
 import { loginFn, logoutFn } from "~/session";
 import { getRecaptchaToken } from "~/lib/recaptcha";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import { Label } from "~/components/ui/label";
 
 const MAX = 240;
 
@@ -31,78 +30,38 @@ function timeAgo(ts: number): string {
   return `hace ${Math.floor(s / 86400)} d`;
 }
 
-// ─── Brand mark: a dot emitting signal rings (a "ping") ───────────────────────
-
-function PulseMark({ size = 12, shoot = false }: { size?: number; shoot?: boolean }) {
+// Brand mark: a dot emitting signal rings — the one bit of ambient motion.
+function PulseMark({ shoot = false }: { shoot?: boolean }) {
   return (
-    <span className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
-      <span className="ping-rings absolute inset-0">
-        <span /><span /><span />
-      </span>
-      {shoot && <span className="ping-shoot absolute inset-0 rounded-full border-[1.5px] border-ring" />}
-      <span className="ping-dot relative rounded-full bg-foreground" style={{ width: size * 0.5, height: size * 0.5 }} />
+    <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center">
+      <span className="ping-rings absolute inset-0"><span /><span /><span /></span>
+      {shoot && <span className="ping-shoot absolute inset-0 rounded-full border-[1.5px]" style={{ borderColor: "var(--signal)" }} />}
+      <span className="ping-dot relative h-1.5 w-1.5 rounded-full" style={{ background: "var(--signal)" }} />
     </span>
   );
 }
 
-// ─── Circular character counter ───────────────────────────────────────────────
-
-function CharRing({ used }: { used: number }) {
-  const R = 11, C = 2 * Math.PI * R;
+// Borderless circular counter — just the progress arc, no track ring.
+function CountArc({ used }: { used: number }) {
+  const R = 9, C = 2 * Math.PI * R;
   const pct = Math.min(used / MAX, 1);
   const over = used > MAX;
-  const offset = C * (1 - pct);
-  const color = over
-    ? "var(--destructive)"
-    : pct > 0.85
-    ? "var(--color-amber)"
-    : "var(--muted-foreground)";
   const left = MAX - used;
+  const color = over ? "var(--destructive)" : pct > 0.9 ? "var(--color-amber)" : "var(--signal)";
   return (
-    <span className="relative inline-flex items-center justify-center" style={{ width: 28, height: 28 }}>
-      <svg width="28" height="28" viewBox="0 0 28 28" className="-rotate-90">
-        <circle cx="14" cy="14" r={R} fill="none" stroke="var(--border)" strokeWidth="2.5" />
-        <circle
-          cx="14" cy="14" r={R} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
-          strokeDasharray={C} strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 0.2s ease, stroke 0.2s ease" }}
-        />
+    <span className="relative inline-flex h-6 w-6 items-center justify-center">
+      <svg width="24" height="24" viewBox="0 0 24 24" className="-rotate-90">
+        <circle cx="12" cy="12" r={R} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round"
+          strokeDasharray={C} strokeDashoffset={C * (1 - pct)}
+          style={{ transition: "stroke-dashoffset 0.2s ease, stroke 0.2s ease" }} />
       </svg>
-      {(over || left <= 32) && (
-        <span
-          className="absolute text-[9px] font-medium [font-variant-numeric:tabular-nums]"
-          style={{ color: over ? "var(--destructive)" : "var(--muted-foreground)" }}
-        >
-          {left}
-        </span>
-      )}
-    </span>
-  );
-}
-
-// ─── Connection status pill ───────────────────────────────────────────────────
-
-function StatusPill({ online }: { online: boolean }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-      <span className="relative flex h-1.5 w-1.5">
-        {online && (
-          <span
-            className="absolute inline-flex h-full w-full rounded-full opacity-60"
-            style={{ background: "var(--color-green)", animation: "ping-ring 2s ease-out infinite" }}
-          />
-        )}
-        <span
-          className="relative inline-flex h-1.5 w-1.5 rounded-full"
-          style={{ background: online ? "var(--color-green)" : "var(--muted-foreground)" }}
-        />
+      <span className="absolute text-[9px] font-medium [font-variant-numeric:tabular-nums]"
+        style={{ color: over ? "var(--destructive)" : "var(--muted-foreground)" }}>
+        {left}
       </span>
-      {online ? "impresora en línea" : "reconectando…"}
     </span>
   );
 }
-
-// ─── Theme toggle ─────────────────────────────────────────────────────────────
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
@@ -115,13 +74,11 @@ function ThemeToggle() {
   }
   return (
     <button onClick={toggle} aria-label="Cambiar tema"
-      className="w-9 h-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-accent transition-[color,background-color,transform] active:scale-[0.94]">
+      className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-accent transition-[color,background-color,transform] active:scale-[0.94]">
       {dark ? <Sun size={16} /> : <Moon size={16} />}
     </button>
   );
 }
-
-// ─── Login (anonymous only) ───────────────────────────────────────────────────
 
 function LoginPanel({ onDone }: { onDone: () => void }) {
   const [username, setUsername] = useState("");
@@ -142,9 +99,6 @@ function LoginPanel({ onDone }: { onDone: () => void }) {
 
   return (
     <form onSubmit={submit} className="ping-rise space-y-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <p className="text-[13px] text-muted-foreground leading-relaxed">
-        Inicia sesión para mandar pings sin límite. Las cuentas las doy yo — no hay registro.
-      </p>
       <Input value={username} onChange={e => setUsername(e.target.value)}
         placeholder="usuario" autoCapitalize="none" disabled={busy} className="bg-input-bg" />
       <Input value={password} onChange={e => setPassword(e.target.value)}
@@ -162,39 +116,39 @@ function LoginPanel({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ─── A printed ping, styled as a tear-off receipt slip ────────────────────────
-
 function PingSlip({ message, from, createdAt, delay, hasImage }: {
   message: string; from: string; createdAt: number; delay: number; hasImage: boolean;
 }) {
+  const clock = new Date(createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return (
     <article
-      className="ping-rise relative rounded-2xl border border-border bg-card px-5 pt-4 pb-3 shadow-sm"
+      className="ping-rise rounded-xl border border-border bg-card py-3"
       style={{ animationDelay: `${delay}ms` }}
     >
-      {message && <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{message}</p>}
+      {/* receipt header */}
+      <div className="flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+        <span>ping</span>
+        <span className="[font-variant-numeric:tabular-nums]">{clock}</span>
+      </div>
+
+      <hr className="perf mx-4 my-2.5" />
+
+      {message && <p className="px-4 text-[15px] leading-relaxed whitespace-pre-wrap break-words">{message}</p>}
       {hasImage && (
-        <p className={`inline-flex items-center gap-1.5 text-[12px] text-muted-foreground ${message ? "mt-2" : ""}`}>
+        <p className={`px-4 inline-flex items-center gap-1.5 text-[12px] text-muted-foreground ${message ? "mt-2" : ""}`}>
           <ImagePlus size={13} /> con foto
         </p>
       )}
 
-      {/* perforation with ticket notches */}
-      <div className="relative my-3">
-        <hr className="perf" />
-        <span className="absolute -left-5 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background border border-border" />
-        <span className="absolute -right-5 top-1/2 h-3 w-3 translate-x-1/2 -translate-y-1/2 rounded-full bg-background border border-border" />
-      </div>
+      <hr className="perf mx-4 my-2.5" />
 
-      <div className="flex items-center justify-between font-mono text-[11px] text-muted-foreground/80">
-        <span>— {from}</span>
-        <span className="[font-variant-numeric:tabular-nums]">{timeAgo(createdAt)}</span>
+      <div className="flex items-center justify-between px-4 font-mono text-[11px] text-muted-foreground/80">
+        <span className="truncate">— {from}</span>
+        <span className="shrink-0 [font-variant-numeric:tabular-nums]">{timeAgo(createdAt)}</span>
       </div>
     </article>
   );
 }
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 function PingPage() {
   const initial = Route.useLoaderData() as WallSnapshot;
@@ -207,16 +161,20 @@ function PingPage() {
   const [sending, setSending]   = useState(false);
   const [cooldown, setCooldown] = useState(initial.cooldownRemaining);
   const [showLogin, setShowLogin] = useState(false);
-  const [online, setOnline]     = useState(true);
-  const [justPinged, setJustPinged] = useState(false); // fires the success ripple
+  const [justPinged, setJustPinged] = useState(false);
   // Attached photo (logged-in only): preview = data URL for <img>, data = base64 payload.
-  const [photo, setPhoto] = useState<{ preview: string; data: string; mediaType: string } | null>(null);
+  // preview/data = 384px print bitmap; original = the full-res file, archived only.
+  const [photo, setPhoto] = useState<{
+    preview: string; data: string; mediaType: string;
+    original: string; originalMediaType: string;
+  } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const user = snapshot.user;            // logged-in account name, or null
+  const user = snapshot.user;
   const mountedAt = useRef(Date.now());
 
-  // Downscale a picked image to 384px wide (printer width) and keep it as base64.
+  // Downscale a picked image to 384px wide (printer width) for printing, and
+  // keep the original file's base64 so the API can archive the full-res version.
   async function pickPhoto(file: File) {
     const dataUrl = await new Promise<string>((res, rej) => {
       const r = new FileReader();
@@ -234,10 +192,12 @@ function PingPage() {
     ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
     ctx.drawImage(img, 0, 0, W, H);
     const png = canvas.toDataURL("image/png");
-    setPhoto({ preview: png, data: png.split(",")[1] ?? "", mediaType: "image/png" });
+    setPhoto({
+      preview: png, data: png.split(",")[1] ?? "", mediaType: "image/png",
+      original: dataUrl.split(",")[1] ?? "", originalMediaType: file.type || "image/png",
+    });
   }
 
-  // Remember the anonymous visitor's name across visits (not used when logged in).
   useEffect(() => {
     try { const w = localStorage.getItem("ping:who"); if (w) setFrom(w); } catch {}
   }, []);
@@ -247,26 +207,23 @@ function PingPage() {
       const next = await fetchWallFn();
       setSnapshot(next);
       setCooldown(next.cooldownRemaining); // server is the source of truth
-      setOnline(true);
-    } catch { setOnline(false); }
+    } catch { /* keep last snapshot */ }
   }, []);
 
-  // Poll.
   useEffect(() => {
     const id = setInterval(refresh, 4000);
     return () => clearInterval(id);
   }, [refresh]);
 
-  // Local cooldown countdown.
   useEffect(() => {
     if (cooldown <= 0) return;
     const id = setInterval(() => setCooldown(c => Math.max(0, c - 1000)), 1000);
     return () => clearInterval(id);
   }, [cooldown]);
 
-  const used = message.length;
-  const remaining = MAX - used;
-  const onCooldown = !user && cooldown > 0; // logged-in accounts have no cooldown
+  const remaining = MAX - message.length;
+  const nearLimit = remaining <= 40;
+  const onCooldown = !user && cooldown > 0;
   // A logged-in user may send a photo with no text; anon needs text.
   const hasContent = message.trim().length > 0 || (!!user && !!photo);
   const canSend = !sending && !onCooldown && hasContent && remaining >= 0;
@@ -280,12 +237,12 @@ function PingPage() {
       const token = await getRecaptchaToken("submit");
       const result = await submitMessageFn({
         data: {
-          message,
-          from,
-          website,
+          message, from, website,
           recaptchaToken: token,
           elapsedMs: Date.now() - mountedAt.current,
-          image: user && photo ? { data: photo.data, mediaType: photo.mediaType } : null,
+          image: user && photo
+            ? { data: photo.data, mediaType: photo.mediaType, original: photo.original, originalMediaType: photo.originalMediaType }
+            : null,
         },
       });
       if (result.ok) {
@@ -308,173 +265,124 @@ function PingPage() {
     }
   }
 
+  const hint = user ? "" : onCooldown ? formatCooldown(cooldown) : "1 ping · 30 min";
+
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* soft radial glow behind the hero */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
-        style={{ background: "radial-gradient(60% 100% at 50% 0%, color-mix(in oklch, var(--foreground) 6%, transparent), transparent 70%)" }}
-      />
+    <div className="mx-auto flex min-h-screen w-full max-w-[420px] flex-col px-5 py-14 sm:py-20">
 
-      <div className="relative mx-auto w-full max-w-lg px-5 py-12 sm:py-20 space-y-12">
+      {/* Header */}
+      <header className="flex items-center justify-between">
+        <span className="inline-flex items-center gap-2">
+          <PulseMark shoot={justPinged} />
+          <span className="font-display text-lg font-semibold tracking-tight lowercase">ping</span>
+        </span>
+        <div className="flex items-center gap-1">
+          {user ? (
+            <button onClick={async () => { await logoutFn(); refresh(); }}
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+              {user} <LogOut size={13} />
+            </button>
+          ) : (
+            <button onClick={() => setShowLogin(v => !v)}
+              className="rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+              Entrar
+            </button>
+          )}
+          <ThemeToggle />
+        </div>
+      </header>
 
-        {/* Header */}
-        <header className="space-y-7">
-          <div className="flex items-center justify-between">
-            <div className="inline-flex items-center gap-2.5">
-              <PulseMark size={14} shoot={justPinged} />
-              <span className="font-display text-lg font-semibold tracking-tight lowercase">ping</span>
-            </div>
-            <div className="flex items-center gap-1">
-              {user ? (
-                <button onClick={async () => { await logoutFn(); refresh(); }}
-                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2.5 py-1 rounded-full hover:bg-accent transition-colors">
-                  {user} <LogOut size={13} />
-                </button>
-              ) : (
-                <button onClick={() => setShowLogin(v => !v)}
-                  className="text-xs text-muted-foreground hover:text-foreground px-2.5 py-1 rounded-full hover:bg-accent transition-colors">
-                  Iniciar sesión
-                </button>
-              )}
-              <ThemeToggle />
-            </div>
-          </div>
+      {/* Hero — one line */}
+      <div className="mt-12 space-y-2.5">
+        <h1 className="font-display text-4xl sm:text-5xl tracking-tight">Mándame un ping.</h1>
+        <p className="text-[15px] leading-relaxed text-muted-foreground">
+          Lo escribes y sale impreso en la impresora de mi escritorio.
+        </p>
+      </div>
 
-          <div className="space-y-4">
-            <h1 className="font-display text-[2.5rem] sm:text-5xl leading-[1.03] tracking-tight">
-              Mándame un ping.
-            </h1>
-            <p className="text-[15px] leading-relaxed text-muted-foreground max-w-md">
-              Escríbelo y, al darle a imprimir, sale en papel en la impresora térmica
-              que tengo en el escritorio. Un mensaje de internet que termina en algo
-              que puedo tocar. <span className="text-foreground">Lo voy a leer.</span>
-            </p>
-            <StatusPill online={online} />
-          </div>
-        </header>
+      {!user && showLogin && <div className="mt-5"><LoginPanel onDone={() => { setShowLogin(false); refresh(); }} /></div>}
 
-        {/* Login (anonymous only) */}
-        {!user && showLogin && (
-          <LoginPanel onDone={() => { setShowLogin(false); refresh(); }} />
+      {/* Composer — the card is the input */}
+      <form onSubmit={handleSubmit}
+        className="mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring/60">
+        {user ? (
+          <p className="border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
+            como <span className="font-medium text-foreground">{user}</span>
+          </p>
+        ) : (
+          <input value={from} onChange={e => setFrom(e.target.value)}
+            placeholder="tu nombre (opcional)" maxLength={24} disabled={sending || onCooldown}
+            className="w-full border-b border-border bg-transparent px-4 py-3 text-sm outline-none placeholder:text-muted-foreground/50" />
         )}
 
-        {/* Composer — a paper slip you fill in */}
-        <form onSubmit={handleSubmit}
-          className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          <div className="space-y-4 p-5">
-            {user ? (
-              <p className="text-xs text-muted-foreground">
-                Mandando como <span className="font-medium text-foreground">{user}</span>.
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                <Label htmlFor="from" className="text-xs text-muted-foreground">Tu nombre</Label>
-                <Input id="from" value={from} onChange={e => setFrom(e.target.value)}
-                  placeholder="anónimo" maxLength={24} disabled={sending || onCooldown}
-                  className="bg-input-bg" />
-              </div>
-            )}
+        <Textarea value={message} onChange={e => setMessage(e.target.value)}
+          placeholder="Escribe algo…" rows={4} disabled={sending || onCooldown}
+          className="min-h-28 resize-none border-0 bg-transparent px-4 py-3.5 text-[15px] leading-relaxed shadow-none focus-visible:ring-0" />
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="message" className="text-xs text-muted-foreground">Mensaje</Label>
-                <CharRing used={used} />
-              </div>
-              <Textarea id="message" value={message} onChange={e => setMessage(e.target.value)}
-                placeholder="Di algo — se imprime en papel de verdad." rows={4}
-                disabled={sending || onCooldown}
-                className="bg-input-bg resize-none leading-relaxed" />
+        {/* Photo preview (logged-in, when attached) */}
+        {user && photo && (
+          <div className="px-4 pb-3">
+            <div className="relative inline-block">
+              <img src={photo.preview} alt="adjunto" className="max-h-40 rounded-lg border border-border" style={{ imageRendering: "pixelated" }} />
+              <button type="button" onClick={() => { setPhoto(null); if (fileRef.current) fileRef.current.value = ""; }}
+                className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background shadow transition-transform active:scale-90">
+                <XIcon size={13} />
+              </button>
             </div>
+          </div>
+        )}
 
-            {/* Photo attachment — logged-in only */}
-            {user && (
-              <div>
+        {/* Honeypot */}
+        <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+          <label>Website<input type="text" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></label>
+        </div>
+
+        {/* Action strip */}
+        <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/30 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            {user && !photo && (
+              <>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) pickPhoto(f).catch(() => setError("No se pudo cargar la imagen")); }} />
-                {photo ? (
-                  <div className="relative inline-block">
-                    <img src={photo.preview} alt="adjunto"
-                      className="max-h-44 rounded-lg border border-border"
-                      style={{ imageRendering: "pixelated" }} />
-                    <button type="button" onClick={() => { setPhoto(null); if (fileRef.current) fileRef.current.value = ""; }}
-                      className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full bg-foreground text-background shadow transition-transform active:scale-90">
-                      <XIcon size={13} />
-                    </button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => fileRef.current?.click()} disabled={sending}
-                    className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground rounded-full border border-border px-3 py-1.5 hover:bg-accent transition-colors">
-                    <ImagePlus size={14} /> Adjuntar foto
-                  </button>
-                )}
-              </div>
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={sending}
+                  aria-label="Adjuntar foto"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                  <ImagePlus size={16} />
+                </button>
+              </>
             )}
-
-            {/* Honeypot — off-screen, not focusable. Bots fill it. */}
-            <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
-              <label>
-                Website
-                <input type="text" tabIndex={-1} autoComplete="off" value={website}
-                  onChange={e => setWebsite(e.target.value)} />
-              </label>
-            </div>
-
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {hint && <span className="font-mono text-xs text-muted-foreground [font-variant-numeric:tabular-nums]">{hint}</span>}
           </div>
-
-          {/* footer strip */}
-          <div className="flex items-center justify-between gap-4 border-t border-border bg-muted/40 px-5 py-3.5">
-            <p className="text-xs text-muted-foreground/90 leading-snug">
-              {user
-                ? "Sin límite — manda los que quieras."
-                : onCooldown
-                ? <>Vuelve en <span className="font-mono text-foreground [font-variant-numeric:tabular-nums]">{formatCooldown(cooldown)}</span></>
-                : "Un ping por visitante cada 30 min."}
-            </p>
+          <div className="flex items-center gap-3">
+            {nearLimit && <CountArc used={message.length} />}
             <Button type="submit" disabled={!canSend} size="lg"
-              className="gap-2 rounded-full px-5 shrink-0 transition-[transform,opacity] active:scale-[0.95]">
+              className="shrink-0 gap-2 rounded-full px-5 transition-transform active:scale-[0.95]">
               {sending ? <Loader2 size={15} className="animate-spin" /> : <ArrowUp size={15} />}
               {sending ? "Enviando…" : "Imprimir"}
             </Button>
           </div>
-        </form>
+        </div>
+      </form>
 
-        {/* Your own pings */}
-        {snapshot.items.length > 0 && (
-          <section className="space-y-4">
-            <div className="flex items-center gap-3">
-              <h2 className="font-display text-sm tracking-wide text-muted-foreground">
-                {user ? "Tu historial" : "Tus pings"}
-              </h2>
-              <span className="h-px flex-1 bg-border" />
-              <span className="text-[11px] text-muted-foreground/60 [font-variant-numeric:tabular-nums]">
-                {snapshot.items.length}
-              </span>
-            </div>
+      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
-            <div className="space-y-3">
-              {snapshot.items.map((item, i) => (
-                <PingSlip key={item.id} message={item.message} from={item.from}
-                  createdAt={item.createdAt} delay={Math.min(i * 60, 300)} hasImage={item.hasImage} />
-              ))}
-            </div>
+      {/* Your own pings */}
+      {snapshot.items.length > 0 && (
+        <section className="mt-12 space-y-3">
+          <h2 className="font-display text-sm tracking-wide text-muted-foreground">
+            {user ? "Tu historial" : "Tus pings"}
+          </h2>
+          {snapshot.items.map((item, i) => (
+            <PingSlip key={item.id} message={item.message} from={item.from}
+              createdAt={item.createdAt} delay={Math.min(i * 50, 250)} hasImage={item.hasImage} />
+          ))}
+        </section>
+      )}
 
-            <p className="text-[11px] text-muted-foreground/60 text-center pt-1">
-              {user
-                ? "El historial de tu cuenta, donde sea que inicies sesión."
-                : "Solo tú ves tus pings. Se imprimen en mi escritorio."}
-            </p>
-          </section>
-        )}
+      <footer className="mt-auto pt-12 text-center">
+        <a href="https://allison.sh" className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors">allison.sh</a>
+      </footer>
 
-        <footer className="flex items-center justify-center gap-2 pt-4 text-xs text-muted-foreground/70">
-          <Printer size={12} />
-          <a href="https://allison.sh" className="hover:text-foreground transition-colors">allison.sh</a>
-        </footer>
-
-      </div>
     </div>
   );
 }

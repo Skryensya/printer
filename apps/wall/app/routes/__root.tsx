@@ -12,8 +12,8 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Mándame algo · Allison" },
-      { name: "description", content: "Escribe un mensaje y sale impreso en papel, en la impresora que tengo en mi escritorio." },
+      { title: "ping · mándame algo a la impresora" },
+      { name: "description", content: "Mándame un ping: escribe un mensaje y sale impreso en papel, en la impresora térmica que tengo en mi escritorio." },
     ],
     links: [
       { rel: "preconnect", href: "https://api.fontshare.com" },
@@ -42,7 +42,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         {/* Apply theme before paint to avoid a flash of the wrong theme. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("wall:theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme:dark)").matches))document.documentElement.classList.add("dark");}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem("ping:theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme:dark)").matches))document.documentElement.classList.add("dark");}catch(e){}})();`,
           }}
         />
       </head>
