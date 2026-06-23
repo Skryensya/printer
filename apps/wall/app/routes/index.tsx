@@ -590,7 +590,7 @@ function PingPage() {
       )}
 
       <footer className="mt-auto pt-12 text-center">
-        <a href="https://allison.sh" className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors">allison.sh</a>
+        <a href="https://allison.sh" className="text-xs text-muted-foreground hover:text-foreground transition-colors">allison.sh</a>
       </footer>
 
       {/* Live camera (logged-in only — the only trigger lives in the composer). */}
