@@ -7,6 +7,8 @@ import { getRecaptchaToken } from "~/lib/recaptcha";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { playSound } from "~/lib/sound-engine";
+import { select006Sound } from "~/lib/select-006";
 
 const MAX = 240;
 
@@ -30,28 +32,10 @@ function timeAgo(ts: number): string {
   return `hace ${Math.floor(s / 86400)} d`;
 }
 
-// A short synthesized "ping" — a bright tone that drops and decays. Built with
-// the Web Audio API so there's no asset to load; fired on send (a user gesture,
-// so the audio context is allowed to start).
+// Plays the "ping" sound (soundcn select-006) on send. Fired from the click, so
+// the audio context is allowed to start. Fire-and-forget; ignore audio errors.
 function playPing(): void {
-  try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(1480, now);
-    osc.frequency.exponentialRampToValueAtTime(880, now + 0.16);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.45);
-    osc.onended = () => ctx.close();
-  } catch { /* audio unavailable — no-op */ }
+  void playSound(select006Sound.dataUri, { volume: 0.5 }).catch(() => { /* no audio */ });
 }
 
 // Brand mark: a dot emitting signal rings — the one bit of ambient motion.
