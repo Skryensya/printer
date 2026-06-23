@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Sun, Moon, LogOut, ArrowUp, ImagePlus, Camera, X as XIcon, Trash2 } from "lucide-react";
+import { Loader2, Sun, Moon, LogOut, ArrowUp, ImagePlus, Camera, SwitchCamera, X as XIcon, Trash2 } from "lucide-react";
 import { fetchWallFn, submitMessageFn, fetchPhotoFn, hidePingFn, type WallSnapshot } from "~/api";
 import { loginFn, logoutFn } from "~/session";
 import { getRecaptchaToken } from "~/lib/recaptcha";
@@ -204,20 +204,14 @@ function PingPage() {
     original: string; originalMediaType: string;
   } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const user = snapshot.user;
   const mountedAt = useRef(Date.now());
 
-  // Downscale a picked image to 384px wide (printer width) for printing, and
-  // keep the original file's base64 so the API can archive the full-res version.
-  async function pickPhoto(file: File) {
-    const dataUrl = await new Promise<string>((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(r.result as string);
-      r.onerror = rej;
-      r.readAsDataURL(file);
-    });
+  // Downscale a source image (data URL) to 384px wide (printer width) for the
+  // print bitmap, and keep the original base64 so the API can archive full-res.
+  async function buildPhotoFromDataUrl(dataUrl: string, originalMediaType: string) {
     const img = new Image();
     await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataUrl; });
     const W = 384;
@@ -230,16 +224,33 @@ function PingPage() {
     const png = canvas.toDataURL("image/png");
     setPhoto({
       preview: png, data: png.split(",")[1] ?? "", mediaType: "image/png",
-      original: dataUrl.split(",")[1] ?? "", originalMediaType: file.type || "image/png",
+      original: dataUrl.split(",")[1] ?? "", originalMediaType,
     });
   }
 
-  // Wraps pickPhoto with a processing state so the button can show activity.
+  // Read a picked file into a data URL, then process it (with a busy state).
   async function handlePickFile(file: File) {
     setProcessing(true);
     setError("");
-    try { await pickPhoto(file); }
-    catch { setError("No se pudo cargar la imagen"); }
+    try {
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result as string);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      await buildPhotoFromDataUrl(dataUrl, file.type || "image/png");
+    } catch { setError("No se pudo cargar la imagen"); }
+    finally { setProcessing(false); }
+  }
+
+  // A frame captured from the live camera (already a data URL).
+  async function handleCapture(dataUrl: string) {
+    setCameraOpen(false);
+    setProcessing(true);
+    setError("");
+    try { await buildPhotoFromDataUrl(dataUrl, "image/jpeg"); }
+    catch { setError("No se pudo procesar la foto"); }
     finally { setProcessing(false); }
   }
 
@@ -353,8 +364,8 @@ function PingPage() {
           Mándame un <span style={{ color: "var(--signal)" }}>ping</span>.
         </h1>
         <p className="text-[15px] leading-relaxed text-muted-foreground text-pretty">
-          Lo escribes y, un segundo después, sale en papel en la impresora de mi
-          escritorio. <span className="text-foreground">Lo voy a leer.</span>
+          Escribe algo y <span className="font-mono">*zzzt*</span> — sale en papel en mi escritorio.{" "}
+          <span className="text-foreground">Y sí, lo leo.</span>
         </p>
       </div>
 
