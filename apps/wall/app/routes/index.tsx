@@ -9,7 +9,6 @@ import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { playSound } from "~/lib/sound-engine";
 import { select006Sound } from "~/lib/select-006";
-import { uChatScrollButtonSound } from "~/lib/u-chat-scroll-button";
 
 const MAX = 240;
 
@@ -37,6 +36,66 @@ function timeAgo(ts: number): string {
 // the audio context is allowed to start. Fire-and-forget; ignore audio errors.
 function playPing(): void {
   void playSound(select006Sound.dataUri, { volume: 0.5 }).catch(() => { /* no audio */ });
+}
+
+// Synthesized thermal-printer "zzzt": a buzzy stepper-motor tone (sawtooth)
+// chopped by a fast square LFO for the raspy feed sound, plus a little filtered
+// noise for paper hiss. Built with Web Audio so there's no asset to ship.
+function playPrinter(): void {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const now = ctx.currentTime;
+    const dur = 0.34;
+
+    // Master envelope — quick in, hold, quick out.
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0, now);
+    master.gain.linearRampToValueAtTime(0.16, now + 0.02);
+    master.gain.setValueAtTime(0.16, now + dur - 0.06);
+    master.gain.linearRampToValueAtTime(0, now + dur);
+    master.connect(ctx.destination);
+
+    // Buzzy motor tone, dropping slightly as the "feed" ends.
+    const carrier = ctx.createOscillator();
+    carrier.type = "sawtooth";
+    carrier.frequency.setValueAtTime(168, now);
+    carrier.frequency.linearRampToValueAtTime(132, now + dur);
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 1500;
+
+    // Fast square LFO chops the amplitude → the characteristic raspy buzz.
+    const am = ctx.createGain();
+    am.gain.value = 0.55;
+    const lfo = ctx.createOscillator();
+    lfo.type = "square";
+    lfo.frequency.value = 58;
+    const lfoDepth = ctx.createGain();
+    lfoDepth.gain.value = 0.45;
+    lfo.connect(lfoDepth).connect(am.gain);
+    carrier.connect(lp).connect(am).connect(master);
+
+    // A thin layer of band-passed noise for the paper hiss.
+    const noiseBuf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+    const ch = noiseBuf.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * 0.5;
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 2200;
+    bp.Q.value = 0.7;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0.06;
+    noise.connect(bp).connect(noiseGain).connect(master);
+
+    carrier.start(now); lfo.start(now); noise.start(now);
+    carrier.stop(now + dur); lfo.stop(now + dur); noise.stop(now + dur);
+    carrier.onended = () => ctx.close();
+  } catch { /* audio unavailable — no-op */ }
 }
 
 // Brand mark: a dot emitting signal rings — the one bit of ambient motion.
@@ -483,7 +542,7 @@ function PingPage() {
         <p className="text-[15px] leading-relaxed text-foreground/80 text-pretty">
           Lo que mandes sale impreso como una boleta en mi escritorio.{" "}
           <span
-            onMouseEnter={() => { void playSound(uChatScrollButtonSound.dataUri, { volume: 0.5, playbackRate: 0.5 }).catch(() => {}); }}
+            onMouseEnter={playPrinter}
             className="cursor-default font-mono font-bold italic text-foreground transition-colors hover:text-[var(--signal)]"
           >
             zzzt
