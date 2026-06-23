@@ -184,6 +184,95 @@ function PingSlip({ id, message, from, createdAt, delay, hasImage, onHide }: {
   );
 }
 
+// Full-screen live camera. Requests permission via getUserMedia, shows the feed,
+// and hands a captured frame (data URL) back to the parent. Front camera preview
+// is mirrored; the saved frame is not.
+function CameraCapture({ onCapture, onClose }: {
+  onCapture: (dataUrl: string) => void; onClose: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [facing, setFacing] = useState<"environment" | "user">("environment");
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setReady(false);
+    setError("");
+    async function start() {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("unsupported");
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false });
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+        setReady(true);
+      } catch {
+        if (!cancelled) setError("No pude usar la cámara. Revisa los permisos del navegador.");
+      }
+    }
+    start();
+    return () => {
+      cancelled = true;
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    };
+  }, [facing]);
+
+  function shoot() {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = v.videoWidth;
+    canvas.height = v.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(v, 0, 0);
+    onCapture(canvas.toDataURL("image/jpeg", 0.92));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black">
+      {error ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center text-white">
+          <Camera size={28} className="opacity-70" />
+          <p className="max-w-xs text-sm opacity-90">{error}</p>
+          <button onClick={onClose} className="rounded-full bg-white/15 px-4 py-2 text-sm active:scale-[0.96]">
+            Cerrar
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="relative flex-1 overflow-hidden">
+            <video ref={videoRef} playsInline muted
+              className="h-full w-full object-cover"
+              style={{ transform: facing === "user" ? "scaleX(-1)" : undefined }} />
+            <button onClick={onClose} aria-label="Cerrar"
+              className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-[scale] active:scale-[0.96]">
+              <XIcon size={18} />
+            </button>
+            <button onClick={() => setFacing(f => (f === "environment" ? "user" : "environment"))}
+              aria-label="Cambiar cámara"
+              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-[scale] active:scale-[0.96]">
+              <SwitchCamera size={18} />
+            </button>
+          </div>
+          <div className="flex items-center justify-center bg-black py-7">
+            <button onClick={shoot} disabled={!ready} aria-label="Tomar foto"
+              className="flex h-16 w-16 items-center justify-center rounded-full ring-4 ring-white/40 transition-[scale] active:scale-[0.96] disabled:opacity-40">
+              <span className="h-12 w-12 rounded-full bg-white" />
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PingPage() {
   const initial = Route.useLoaderData() as WallSnapshot;
 
@@ -416,17 +505,15 @@ function PingPage() {
                 {/* Gallery / file picker */}
                 <input ref={fileRef} type="file" accept="image/*" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) handlePickFile(f); e.target.value = ""; }} />
-                {/* Camera capture — opens the rear camera directly on mobile */}
-                <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handlePickFile(f); e.target.value = ""; }} />
                 {processing ? (
                   <span className="inline-flex h-9 items-center gap-1.5 px-1 text-xs text-muted-foreground">
                     <Loader2 size={15} className="animate-spin" /> Cargando…
                   </span>
                 ) : (
                   <>
-                    <button type="button" onClick={() => cameraRef.current?.click()} disabled={sending}
-                      aria-label="Tomar una foto"
+                    {/* Live camera — asks for permission and uses the device camera */}
+                    <button type="button" onClick={() => setCameraOpen(true)} disabled={sending}
+                      aria-label="Tomar una foto con la cámara"
                       className="group inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-[color,background-color,border-color,scale] hover:border-ring/40 hover:text-foreground active:scale-[0.96] disabled:opacity-50">
                       <Camera size={15} className="transition-transform group-hover:-translate-y-px" />
                       Cámara
@@ -472,6 +559,11 @@ function PingPage() {
       <footer className="mt-auto pt-12 text-center">
         <a href="https://allison.sh" className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors">allison.sh</a>
       </footer>
+
+      {/* Live camera (logged-in only — the only trigger lives in the composer). */}
+      {user && cameraOpen && (
+        <CameraCapture onCapture={handleCapture} onClose={() => setCameraOpen(false)} />
+      )}
 
     </div>
   );
