@@ -85,8 +85,8 @@
   --input-bg:             #fffcf0;
   --ring:                 #100f0f;
 
-  /* Signal accent — the "ping" colour. Flexoki cyan. */
-  --signal:               #24837b;
+  /* Signal accent — the "ping" colour. Flexoki green. */
+  --signal:               #66800b;
 }
 
 /* ─── Dark theme — Flexoki dark ───────────────────────────────────────────── */
@@ -118,8 +118,8 @@
   --input-bg:             #1c1b1a;
   --ring:                 #cecdc3;
 
-  /* Signal accent — lighter cyan for dark paper. */
-  --signal:               #5abdac;
+  /* Signal accent — lighter green for dark paper. */
+  --signal:               #a0af54;
 }
 
 /* ─── Base ────────────────────────────────────────────────────────────────── */
@@ -135,36 +135,34 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Risograph colour mesh on a fixed, oversized layer that slowly drifts —
-     five Flexoki inks pooled in the corners over warm paper. Cyan ↔ violet up
-     top, orange ↔ green below, a magenta bloom through the middle. */
+  /* Risograph colour mesh on a fixed, oversized layer that slowly drifts.
+     Oversized inset (-35%) leaves room for the drift transform to move/rotate
+     without ever revealing the layer's edges. */
   body::before {
     content: "";
     position: fixed;
-    inset: -20%;
+    inset: -35%;
     z-index: -2;
     pointer-events: none;
     background-repeat: no-repeat;
-    /* Big, overlapping pools with a dense core that feathers out over a long
-       distance (transparent pushed to ~90%) — soft edges, more volume. The mid
-       stop keeps the falloff gradual so it reads round, not like a hard disc. */
+    /* Big, overlapping pools that feather out over a long distance for soft
+       edges and volume — a harmonious, green-anchored palette (green → teal →
+       gold → clay), no clashing rainbow. */
     background-image:
-      radial-gradient(105% 90% at 6% 4%,   color-mix(in oklch, #3aa99f 26%, transparent) 0%, color-mix(in oklch, #3aa99f 11%, transparent) 42%, transparent 88%),
-      radial-gradient(100% 88% at 94% 6%,  color-mix(in oklch, #8b7ec8 24%, transparent) 0%, color-mix(in oklch, #8b7ec8 10%, transparent) 44%, transparent 88%),
-      radial-gradient(102% 90% at 94% 96%, color-mix(in oklch, #da702c 24%, transparent) 0%, color-mix(in oklch, #da702c 10%, transparent) 44%, transparent 90%),
-      radial-gradient(102% 90% at 6% 96%,  color-mix(in oklch, #879a39 20%, transparent) 0%, color-mix(in oklch, #879a39  9%, transparent) 44%, transparent 90%),
-      radial-gradient(95% 82% at 50% 52%,  color-mix(in oklch, #ce5d97 15%, transparent) 0%, transparent 82%);
-    animation: mesh-drift 40s ease-in-out infinite alternate;
+      radial-gradient(105% 90% at 6% 4%,   color-mix(in oklch, #66800b 26%, transparent) 0%, color-mix(in oklch, #66800b 11%, transparent) 44%, transparent 90%),
+      radial-gradient(100% 88% at 94% 6%,  color-mix(in oklch, #24837b 22%, transparent) 0%, color-mix(in oklch, #24837b 10%, transparent) 44%, transparent 90%),
+      radial-gradient(102% 90% at 94% 96%, color-mix(in oklch, #ad8301 22%, transparent) 0%, color-mix(in oklch, #ad8301 10%, transparent) 44%, transparent 90%),
+      radial-gradient(102% 90% at 6% 96%,  color-mix(in oklch, #bc5215 15%, transparent) 0%, color-mix(in oklch, #bc5215  7%, transparent) 44%, transparent 90%);
+    animation: mesh-drift 28s ease-in-out infinite alternate;
     will-change: transform;
   }
   .dark body::before {
-    /* Brighter inks, lower alpha, so they glow on dark paper without muddying. */
+    /* Lighter inks, lower alpha, so they glow on dark paper without muddying. */
     background-image:
-      radial-gradient(105% 90% at 6% 4%,   color-mix(in oklch, #5abdac 20%, transparent) 0%, color-mix(in oklch, #5abdac  9%, transparent) 42%, transparent 88%),
-      radial-gradient(100% 88% at 94% 6%,  color-mix(in oklch, #b3a4e8 18%, transparent) 0%, color-mix(in oklch, #b3a4e8  8%, transparent) 44%, transparent 88%),
-      radial-gradient(102% 90% at 94% 96%, color-mix(in oklch, #ec8b49 18%, transparent) 0%, color-mix(in oklch, #ec8b49  8%, transparent) 44%, transparent 90%),
-      radial-gradient(102% 90% at 6% 96%,  color-mix(in oklch, #a8c050 15%, transparent) 0%, color-mix(in oklch, #a8c050  7%, transparent) 44%, transparent 90%),
-      radial-gradient(95% 82% at 50% 52%,  color-mix(in oklch, #d56fa3 13%, transparent) 0%, transparent 82%);
+      radial-gradient(105% 90% at 6% 4%,   color-mix(in oklch, #a0af54 20%, transparent) 0%, color-mix(in oklch, #a0af54  9%, transparent) 44%, transparent 90%),
+      radial-gradient(100% 88% at 94% 6%,  color-mix(in oklch, #5abdac 18%, transparent) 0%, color-mix(in oklch, #5abdac  8%, transparent) 44%, transparent 90%),
+      radial-gradient(102% 90% at 94% 96%, color-mix(in oklch, #d0a215 18%, transparent) 0%, color-mix(in oklch, #d0a215  8%, transparent) 44%, transparent 90%),
+      radial-gradient(102% 90% at 6% 96%,  color-mix(in oklch, #da702c 14%, transparent) 0%, color-mix(in oklch, #da702c  7%, transparent) 44%, transparent 90%);
   }
 
   /* Faint film grain over the mesh — breaks gradient banding and gives the wash
@@ -193,8 +191,9 @@
 /* Slow, subtle drift of the colour mesh — the pools breathe and rotate just
    enough to feel alive. The -20% inset on the layer hides the moving edges. */
 @keyframes mesh-drift {
-  0%   { transform: translate3d(0, 0, 0)        rotate(0deg)  scale(1); }
-  100% { transform: translate3d(2.5%, -2%, 0)   rotate(7deg)  scale(1.08); }
+  0%   { transform: translate3d(-4%, 3%, 0)  rotate(-6deg) scale(1.05); }
+  50%  { transform: translate3d(5%, -4%, 0)  rotate(8deg)  scale(1.18); }
+  100% { transform: translate3d(-3%, -2%, 0) rotate(-3deg) scale(1.08); }
 }
 
 @keyframes ping-ring {
