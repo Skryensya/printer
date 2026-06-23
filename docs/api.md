@@ -141,6 +141,68 @@ curl -X POST https://tu-servidor/api/v1/print/ticket \
 
 ---
 
+### `POST /api/v1/print/todo`
+
+Imprime una lista de tareas o de compras como tarjeta. Requiere el permiso `todo`.
+
+**Body:**
+```json
+{
+  "title": "Compras",
+  "badge": "SUPER",
+  "items": [
+    "Pan",
+    ["Leche", "2 L"],
+    ["Huevos", "x12"]
+  ]
+}
+```
+
+| Campo | Tipo | Default | Descripción |
+|---|---|---|---|
+| `items` | array | **requerido** | Lista no vacía. Cada ítem es un string (nombre) o un par `[nombre, cantidad]`. El nombre se recorta a 50 caracteres y la cantidad a 8; los ítems vacíos se descartan |
+| `title` | string | — | Título de la tarjeta (opcional) |
+| `badge` | string | — | Etiqueta corta en la esquina (opcional) |
+
+Si tras descartar los ítems vacíos no queda ninguno, devuelve `400`.
+
+**Ejemplo:**
+```bash
+curl -X POST https://tu-servidor/api/v1/print/todo \
+  -H "X-API-Key: tu-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Compras","items":["Pan",["Leche","2 L"],["Huevos","x12"]]}'
+```
+
+---
+
+### `POST /api/v1/print/message`
+
+Imprime un mensaje corto como tarjeta, con la fecha agregada automáticamente. Requiere el permiso `message` o `message_custom`.
+
+**Body:**
+```json
+{
+  "message": "¡Gracias por tu compra!",
+  "from": "Tienda"
+}
+```
+
+| Campo | Tipo | Default | Descripción |
+|---|---|---|---|
+| `message` | string | **requerido** | Texto del mensaje |
+| `from` | string | nombre de tu key | Remitente mostrado en la tarjeta. Solo se respeta si tu key tiene el permiso `message_custom`; en caso contrario se fuerza al nombre de la key |
+
+**Ejemplo:**
+```bash
+curl -X POST https://tu-servidor/api/v1/print/message \
+  -H "X-API-Key: tu-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"¡Gracias por tu compra!","from":"Tienda"}'
+```
+
+---
+
 ### `POST /api/v1/print/qr`
 
 Imprime un código QR centrado en la hoja.
@@ -166,33 +228,6 @@ curl -X POST https://tu-servidor/api/v1/print/qr \
   -H "X-API-Key: tu-api-key" \
   -H "Content-Type: application/json" \
   -d '{"text":"https://ejemplo.com/pedido/1042"}'
-```
-
----
-
-### `POST /api/v1/print/barcode`
-
-Imprime un código de barras Code 128.
-
-**Body:**
-```json
-{
-  "data": "PEDIDO-1042",
-  "height": 80
-}
-```
-
-| Campo | Tipo | Default | Descripción |
-|---|---|---|---|
-| `data` | string | **requerido** | Datos a codificar |
-| `height` | integer 1–255 | `80` | Altura de las barras en puntos |
-
-**Ejemplo:**
-```bash
-curl -X POST https://tu-servidor/api/v1/print/barcode \
-  -H "X-API-Key: tu-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"data":"PEDIDO-1042","height":80}'
 ```
 
 ---
