@@ -127,31 +127,54 @@
   * {
     @apply border-border outline-ring/40;
   }
+  html { background-color: var(--background); }
   body {
     @apply text-foreground;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Rich risograph-style colour mesh — five Flexoki inks pooled in the corners
-       over warm paper. Cyan ↔ violet up top, orange ↔ green below, a magenta
-       bloom through the middle. Fixed so it sits behind the scroll. */
-    background-color: var(--background);
-    background-image:
-      radial-gradient(72% 55% at 0% 0%,     color-mix(in oklch, #3aa99f 34%, transparent), transparent 60%),
-      radial-gradient(66% 52% at 100% 2%,   color-mix(in oklch, #8b7ec8 32%, transparent), transparent 60%),
-      radial-gradient(62% 52% at 100% 100%, color-mix(in oklch, #da702c 32%, transparent), transparent 62%),
-      radial-gradient(62% 55% at 0% 100%,   color-mix(in oklch, #879a39 28%, transparent), transparent 62%),
-      radial-gradient(52% 46% at 50% 58%,   color-mix(in oklch, #ce5d97 20%, transparent), transparent 70%);
-    background-attachment: fixed;
   }
-  .dark body {
+
+  /* Risograph colour mesh on a fixed, oversized layer that slowly drifts —
+     five Flexoki inks pooled in the corners over warm paper. Cyan ↔ violet up
+     top, orange ↔ green below, a magenta bloom through the middle. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: -20%;
+    z-index: -2;
+    pointer-events: none;
+    background-repeat: no-repeat;
+    background-image:
+      radial-gradient(60% 50% at 10% 8%,  color-mix(in oklch, #3aa99f 38%, transparent), transparent 60%),
+      radial-gradient(58% 48% at 90% 10%, color-mix(in oklch, #8b7ec8 36%, transparent), transparent 60%),
+      radial-gradient(58% 50% at 90% 92%, color-mix(in oklch, #da702c 36%, transparent), transparent 62%),
+      radial-gradient(58% 50% at 10% 92%, color-mix(in oklch, #879a39 30%, transparent), transparent 62%),
+      radial-gradient(48% 44% at 50% 55%, color-mix(in oklch, #ce5d97 24%, transparent), transparent 70%);
+    animation: mesh-drift 34s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+  .dark body::before {
     /* Brighter inks, lower alpha, so they glow on dark paper without muddying. */
     background-image:
-      radial-gradient(72% 55% at 0% 0%,     color-mix(in oklch, #5abdac 26%, transparent), transparent 60%),
-      radial-gradient(66% 52% at 100% 2%,   color-mix(in oklch, #b3a4e8 24%, transparent), transparent 60%),
-      radial-gradient(62% 52% at 100% 100%, color-mix(in oklch, #ec8b49 24%, transparent), transparent 62%),
-      radial-gradient(62% 55% at 0% 100%,   color-mix(in oklch, #a8c050 20%, transparent), transparent 62%),
-      radial-gradient(52% 46% at 50% 58%,   color-mix(in oklch, #d56fa3 18%, transparent), transparent 70%);
+      radial-gradient(60% 50% at 10% 8%,  color-mix(in oklch, #5abdac 28%, transparent), transparent 60%),
+      radial-gradient(58% 48% at 90% 10%, color-mix(in oklch, #b3a4e8 26%, transparent), transparent 60%),
+      radial-gradient(58% 50% at 90% 92%, color-mix(in oklch, #ec8b49 26%, transparent), transparent 62%),
+      radial-gradient(58% 50% at 10% 92%, color-mix(in oklch, #a8c050 22%, transparent), transparent 62%),
+      radial-gradient(48% 44% at 50% 55%, color-mix(in oklch, #d56fa3 20%, transparent), transparent 70%);
+  }
+
+  /* Faint film grain over the mesh — breaks gradient banding and gives the wash
+     a printed, risograph texture instead of a smooth digital look. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.5;
+    mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   h1, h2, h3 {
     font-family: var(--font-display);
@@ -163,6 +186,13 @@
 /* ─── Ping: signal pulse + receipt motifs ─────────────────────────────────── */
 /* A "ping" is a signal sent out that returns as something physical. The pulse
    rings echo that; the slips echo the paper it prints on. */
+
+/* Slow, subtle drift of the colour mesh — the pools breathe and rotate just
+   enough to feel alive. The -20% inset on the layer hides the moving edges. */
+@keyframes mesh-drift {
+  0%   { transform: translate3d(0, 0, 0)        rotate(0deg)  scale(1); }
+  100% { transform: translate3d(2.5%, -2%, 0)   rotate(7deg)  scale(1.08); }
+}
 
 @keyframes ping-ring {
   0%   { transform: scale(0.7); opacity: 0.28; }
@@ -216,6 +246,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  body::before,
   .ping-rings > span,
   .ping-dot,
   .ping-shoot,
