@@ -561,9 +561,9 @@ function PingPage() {
           <div className="flex items-center gap-3">
             {nearLimit && <CountArc used={message.length} />}
             <Button type="submit" disabled={!canSend} size="lg"
-              className="shrink-0 gap-2 rounded-full px-5 transition-transform active:scale-[0.95]">
+              className="shrink-0 gap-1.5 rounded-full pl-5 pr-4 transition-transform active:scale-[0.95]">
               {sending ? "enviando…" : "Ping"}
-              {sending ? <Loader2 size={15} className="animate-spin" /> : <ChevronRight size={15} />}
+              {sending ? <Loader2 size={15} className="animate-spin" /> : <ChevronRight size={15} className="-mr-0.5" />}
             </Button>
           </div>
         </div>
@@ -586,7 +586,7 @@ function PingPage() {
       )}
 
       <footer className="mt-auto pt-12 text-center">
-        <a href="https://allison.sh" className="text-xs text-muted-foreground hover:text-foreground transition-colors">allison.sh</a>
+        <a href="https://allison.sh" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">allison.sh</a>
       </footer>
 
       {/* Live camera (logged-in only — the only trigger lives in the composer). */}
