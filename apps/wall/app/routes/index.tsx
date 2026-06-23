@@ -9,6 +9,7 @@ import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { playSound } from "~/lib/sound-engine";
 import { select006Sound } from "~/lib/select-006";
+import { uChatScrollButtonSound } from "~/lib/u-chat-scroll-button";
 
 const MAX = 240;
 
@@ -455,7 +456,7 @@ function PingPage() {
         <span className="inline-flex items-center gap-2">
           <PulseMark shoot={justPinged} />
           <span className="font-display text-lg font-semibold tracking-tight lowercase">
-            ping<span className="text-muted-foreground/60">.allison.sh</span>
+            ping<span className="text-muted-foreground">.allison.sh</span>
           </span>
         </span>
         <div className="flex items-center gap-1">
@@ -479,9 +480,14 @@ function PingPage() {
         <h1 className="font-display text-4xl sm:text-5xl tracking-tight">
           Mándame un <span style={{ color: "var(--signal)" }}>ping</span>.
         </h1>
-        <p className="text-[15px] leading-relaxed text-muted-foreground text-pretty">
+        <p className="text-[15px] leading-relaxed text-foreground/80 text-pretty">
           Lo que mandes sale impreso como una boleta en mi escritorio.{" "}
-          <span className="font-mono italic">zzzt</span>.
+          <span
+            onMouseEnter={() => { void playSound(uChatScrollButtonSound.dataUri, { volume: 0.5, playbackRate: 0.75 }).catch(() => {}); }}
+            className="cursor-default font-mono font-bold italic text-foreground transition-colors hover:text-[var(--signal)]"
+          >
+            zzzt
+          </span>.
         </p>
       </div>
 
