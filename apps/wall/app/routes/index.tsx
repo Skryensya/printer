@@ -311,15 +311,7 @@ function PingPage() {
   const hint = user ? "" : onCooldown ? formatCooldown(cooldown) : "1 ping · 30 min";
 
   return (
-    <>
-      {/* Continuous-feed sprocket margins — only when there's empty space beside
-          the column (desktop). The mobile layout stays clean. */}
-      <div aria-hidden className="pointer-events-none fixed inset-y-0 left-0 right-0 z-0 hidden min-[900px]:block">
-        <div className="sprocket absolute inset-y-0" style={{ left: "calc(50% - 320px)" }} />
-        <div className="sprocket absolute inset-y-0" style={{ right: "calc(50% - 320px)" }} />
-      </div>
-
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[420px] flex-col px-5 py-14 sm:py-20">
+    <div className="mx-auto flex min-h-screen w-full max-w-[420px] flex-col px-5 py-14 sm:py-20">
 
       {/* Header */}
       <header className="flex items-center justify-between">
@@ -441,7 +433,6 @@ function PingPage() {
         <a href="https://allison.sh" className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors">allison.sh</a>
       </footer>
 
-      </div>
-    </>
+    </div>
   );
 }

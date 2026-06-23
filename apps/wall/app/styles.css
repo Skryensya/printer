@@ -132,14 +132,26 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Flat warm paper with a faint dot grid — engineering/graph paper, echoing
-       the printer's own pixel grid. A crisp pattern, not a colour wash. */
+    /* Rich risograph-style colour mesh — five Flexoki inks pooled in the corners
+       over warm paper. Cyan ↔ violet up top, orange ↔ green below, a magenta
+       bloom through the middle. Fixed so it sits behind the scroll. */
     background-color: var(--background);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1' cy='1' r='1' fill='%23100f0f' fill-opacity='0.05'/%3E%3C/svg%3E");
+    background-image:
+      radial-gradient(72% 55% at 0% 0%,     color-mix(in oklch, #3aa99f 34%, transparent), transparent 60%),
+      radial-gradient(66% 52% at 100% 2%,   color-mix(in oklch, #8b7ec8 32%, transparent), transparent 60%),
+      radial-gradient(62% 52% at 100% 100%, color-mix(in oklch, #da702c 32%, transparent), transparent 62%),
+      radial-gradient(62% 55% at 0% 100%,   color-mix(in oklch, #879a39 28%, transparent), transparent 62%),
+      radial-gradient(52% 46% at 50% 58%,   color-mix(in oklch, #ce5d97 20%, transparent), transparent 70%);
+    background-attachment: fixed;
   }
   .dark body {
-    /* Light dots on dark paper. */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1' cy='1' r='1' fill='%23cecdc3' fill-opacity='0.06'/%3E%3C/svg%3E");
+    /* Brighter inks, lower alpha, so they glow on dark paper without muddying. */
+    background-image:
+      radial-gradient(72% 55% at 0% 0%,     color-mix(in oklch, #5abdac 26%, transparent), transparent 60%),
+      radial-gradient(66% 52% at 100% 2%,   color-mix(in oklch, #b3a4e8 24%, transparent), transparent 60%),
+      radial-gradient(62% 52% at 100% 100%, color-mix(in oklch, #ec8b49 24%, transparent), transparent 62%),
+      radial-gradient(62% 55% at 0% 100%,   color-mix(in oklch, #a8c050 20%, transparent), transparent 62%),
+      radial-gradient(52% 46% at 50% 58%,   color-mix(in oklch, #d56fa3 18%, transparent), transparent 70%);
   }
   h1, h2, h3 {
     font-family: var(--font-display);
@@ -201,16 +213,6 @@
 .perf {
   border: 0;
   border-top: 1.5px dashed var(--border);
-}
-
-/* Continuous-feed sprocket margins. Two vertical strips of punched holes flank
-   the content column — like dot-matrix / tractor-feed paper. Only rendered when
-   the viewport is wide enough to have empty margins (handled in the markup). */
-.sprocket {
-  width: 12px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='30'%3E%3Ccircle cx='6' cy='15' r='3.5' fill='none' stroke='%23878580' stroke-opacity='0.5' stroke-width='1.2'/%3E%3C/svg%3E");
-  background-repeat: repeat-y;
-  background-position: center;
 }
 
 @media (prefers-reduced-motion: reduce) {
