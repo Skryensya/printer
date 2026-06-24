@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Sun, Moon, LogOut, ChevronRight, Check, ImagePlus, Camera, SwitchCamera, X as XIcon, Trash2 } from "lucide-react";
+import { Loader2, Sun, Moon, Languages, LogOut, ChevronRight, Check, ImagePlus, Camera, SwitchCamera, X as XIcon, Trash2 } from "lucide-react";
 import { fetchWallFn, submitMessageFn, fetchPhotoFn, hidePingFn, type WallSnapshot } from "~/api";
 import { loginFn, logoutFn } from "~/session";
 import { getRecaptchaToken } from "~/lib/recaptcha";
@@ -52,16 +52,16 @@ function CountArc({ used }: { used: number }) {
   );
 }
 
-// ES | EN switch — links to the same page in the other locale.
+// One i18n icon that toggles to the other locale (same page). The label is the
+// target language's own endonym, so it needs no translation.
 function LangSwitch({ lang }: { lang: Lang }) {
-  const base = "rounded-full px-2 py-1 text-xs font-medium transition-colors";
-  const active = "text-foreground";
-  const idle = "text-muted-foreground/60 hover:text-foreground";
+  const to    = lang === "es" ? "/en" : "/es";
+  const other = lang === "es" ? "English" : "Español";
   return (
-    <div className="flex items-center" aria-label="Language">
-      <Link to="/es" className={`${base} ${lang === "es" ? active : idle}`}>ES</Link>
-      <Link to="/en" className={`${base} ${lang === "en" ? active : idle}`}>EN</Link>
-    </div>
+    <Link to={to} aria-label={other} title={other}
+      className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-accent transition-[color,background-color,transform] active:scale-[0.94]">
+      <Languages size={16} />
+    </Link>
   );
 }
 
@@ -458,20 +458,23 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
             Ping<span className="text-muted-foreground">.allison.sh</span>
           </span>
         </span>
-        <div className="flex items-center gap-1">
-          <LangSwitch lang={lang} />
+        <div className="flex items-center gap-2">
           {user ? (
             <button onClick={async () => { await logoutFn(); refresh(); }}
-              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
               {user} <LogOut size={13} />
             </button>
           ) : (
             <button onClick={() => setShowLogin(v => !v)}
-              className="rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+              className="rounded-full px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
               {t.signIn}
             </button>
           )}
-          <ThemeToggle t={t} />
+          {/* Utility toggles, grouped as one compact pair. */}
+          <div className="flex items-center gap-0.5">
+            <LangSwitch lang={lang} />
+            <ThemeToggle t={t} />
+          </div>
         </div>
       </header>
 
