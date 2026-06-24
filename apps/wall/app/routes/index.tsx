@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Sun, Moon, LogOut, ChevronRight, ImagePlus, Camera, SwitchCamera, X as XIcon, Trash2 } from "lucide-react";
+import { Loader2, Sun, Moon, LogOut, ChevronRight, Check, ImagePlus, Camera, SwitchCamera, X as XIcon, Trash2 } from "lucide-react";
 import { fetchWallFn, submitMessageFn, fetchPhotoFn, hidePingFn, type WallSnapshot } from "~/api";
 import { loginFn, logoutFn } from "~/session";
 import { getRecaptchaToken } from "~/lib/recaptcha";
@@ -312,6 +312,8 @@ function PingPage() {
   const [cooldown, setCooldown] = useState(initial.cooldownRemaining);
   const [showLogin, setShowLogin] = useState(false);
   const [justPinged, setJustPinged] = useState(false);
+  const [sent, setSent] = useState(false); // transient "enviado" confirmation
+  const [isMac, setIsMac] = useState(false); // for the ⌘/Ctrl send hint
   const [processing, setProcessing] = useState(false); // downscaling a picked photo
   // Attached photo (logged-in only): preview = data URL for <img>, data = base64 payload.
   // preview/data = 384px print bitmap; original = the full-res file, archived only.
@@ -372,6 +374,7 @@ function PingPage() {
 
   useEffect(() => {
     try { const w = localStorage.getItem("ping:who"); if (w) setFrom(w); } catch {}
+    setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
   }, []);
 
   const refresh = useCallback(async () => {
@@ -405,6 +408,7 @@ function PingPage() {
     if (!canSend) return;
     setSending(true);
     setError("");
+    setSent(false);
     try {
       const token = await getRecaptchaToken("submit");
       const result = await submitMessageFn({
@@ -424,8 +428,10 @@ function PingPage() {
         if (fileRef.current) fileRef.current.value = "";
         setCooldown(result.cooldownRemaining);
         setJustPinged(true);
+        setSent(true);
         playPing();
         setTimeout(() => setJustPinged(false), 700);
+        setTimeout(() => setSent(false), 3500);
         await refresh();
       } else {
         setError(result.error);
@@ -503,6 +509,12 @@ function PingPage() {
         )}
 
         <Textarea value={message} onChange={e => setMessage(e.target.value)}
+          onKeyDown={e => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
           placeholder="Escribe algo…" rows={4} disabled={sending || onCooldown}
           className="min-h-28 resize-none border-0 bg-transparent px-4 py-3.5 text-[15px] leading-relaxed shadow-none focus-visible:ring-0" />
 
@@ -560,6 +572,11 @@ function PingPage() {
           </div>
           <div className="flex items-center gap-3">
             {nearLimit && <CountArc used={message.length} />}
+            {canSend && (
+              <kbd className="hidden select-none items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground sm:inline-flex">
+                {isMac ? "⌘" : "Ctrl"} ↵
+              </kbd>
+            )}
             <Button type="submit" disabled={!canSend} size="lg"
               className="shrink-0 cursor-pointer gap-1.5 rounded-full pl-5 pr-4 transition-[transform,filter,background-color] active:scale-[0.92] active:brightness-90">
               {sending ? "enviando…" : "Ping"}
@@ -570,6 +587,11 @@ function PingPage() {
       </form>
 
       {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+      {sent && !error && (
+        <p className="ping-rise mt-3 inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: "var(--signal)" }}>
+          <Check size={15} strokeWidth={2.5} /> Enviado · sale impreso en el escritorio
+        </p>
+      )}
 
       {/* Your own pings */}
       {snapshot.items.length > 0 && (
