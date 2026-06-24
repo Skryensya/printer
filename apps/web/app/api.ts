@@ -109,6 +109,8 @@ export interface PrintJob {
   created_at:  number;
   updated_at:  number;
   image_url?:  string | null; // archived original (R2), image jobs only
+  sender_ip?:      string | null; // originating end-user IP (relayed pings only)
+  sender_account?: string | null; // wall login name if signed in; null = anonymous
 }
 
 // ─── Admin: jobs ──────────────────────────────────────────────────────────────

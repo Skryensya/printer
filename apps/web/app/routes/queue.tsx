@@ -4,6 +4,7 @@ import {
   Ban, RefreshCw, Trash2, Printer as PrinterIcon,
   Type, QrCode, Barcode, ImageIcon, Ticket, LayoutGrid,
   X, CheckSquare, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Check, ListTodo,
+  UserRoundCheck, UserRound,
 } from "lucide-react";
 import {
   listJobs, getJob, retryJob, reprintJob, cancelJob, deleteJob, watchWsUrl,
@@ -184,6 +185,21 @@ function JobRow({
           <span className="text-sm font-medium">{job.type}</span>
           <span className="text-muted-foreground/40 text-xs">·</span>
           <span className="text-xs text-muted-foreground truncate">{job.source}</span>
+          {job.sender_ip && (
+            <>
+              <span className="text-muted-foreground/40 text-xs">·</span>
+              {job.sender_account ? (
+                <span className="inline-flex min-w-0 items-center gap-1 text-xs text-primary/80" title={`Signed in as ${job.sender_account}`}>
+                  <UserRoundCheck size={12} className="flex-shrink-0" />
+                  <span className="truncate">{job.sender_account}</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/60" title="Anonymous sender">
+                  <UserRound size={12} className="flex-shrink-0" /> anon
+                </span>
+              )}
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -209,6 +225,24 @@ function JobRow({
               <p className="text-[11px] text-destructive font-mono leading-relaxed whitespace-pre-wrap break-all">
                 {job.error}
               </p>
+            </div>
+          )}
+
+          {/* Sender — who relayed this (wall pings only): login state + origin IP */}
+          {job.sender_ip && (
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              {job.sender_account ? (
+                <span className="inline-flex items-center gap-1.5 text-primary/90">
+                  <UserRoundCheck size={13} /> {job.sender_account}
+                  <span className="text-muted-foreground/50">· signed in</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <UserRound size={13} /> anonymous
+                </span>
+              )}
+              <span className="text-muted-foreground/30">·</span>
+              <span className="font-mono text-muted-foreground/70">{job.sender_ip}</span>
             </div>
           )}
 

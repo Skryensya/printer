@@ -22,6 +22,12 @@ export async function migrate(): Promise<void> {
   // Archived-image URL (R2). Added idempotently for existing deployments.
   await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS image_url TEXT`;
 
+  // Originating end-user attribution, relayed by a trusted front-end (the wall)
+  // — the request IP is the relay's, not the sender's. sender_account is the
+  // wall login name when signed in; null = the sender was anonymous.
+  await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sender_ip TEXT`;
+  await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sender_account TEXT`;
+
   await sql`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, created_at)`;
 
   await sql`
@@ -162,6 +168,16 @@ export interface Job {
   created_at:  number;
   updated_at:  number;
   image_url:   string | null; // archived original (R2), set after upload
+  sender_ip:      string | null; // originating end-user IP, relayed by a trusted client
+  sender_account: string | null; // wall login name if signed in; null = anonymous
+}
+
+// Optional end-user attribution for a job, supplied by a trusted relay. Stored
+// verbatim — the API never derives these from the request itself (that IP is the
+// relay's). Plain fields, not the request, are the source of truth here.
+export interface JobMeta {
+  senderIp?:      string | null;
+  senderAccount?: string | null;
 }
 
 // Attach the archived-image URL to a job (called after the R2 upload completes).
@@ -169,11 +185,11 @@ export async function setJobImageUrl(id: string, url: string): Promise<void> {
   await sql`UPDATE jobs SET image_url = ${url} WHERE id = ${id}`;
 }
 
-export async function enqueueJob(type: JobType, payload: unknown, source: string): Promise<Job> {
+export async function enqueueJob(type: JobType, payload: unknown, source: string, meta: JobMeta = {}): Promise<Job> {
   const id = crypto.randomUUID();
   const [job] = await sql<Job[]>`
-    INSERT INTO jobs (id, type, payload, source)
-    VALUES (${id}, ${type}, ${JSON.stringify(payload)}, ${source})
+    INSERT INTO jobs (id, type, payload, source, sender_ip, sender_account)
+    VALUES (${id}, ${type}, ${JSON.stringify(payload)}, ${source}, ${meta.senderIp ?? null}, ${meta.senderAccount ?? null})
     RETURNING *
   `;
   return job!;

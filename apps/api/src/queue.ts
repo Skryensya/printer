@@ -1,7 +1,7 @@
 import {
   enqueueJob, listPendingJobs, updateJobStatus, getJob,
   incrementRetry, resetStuckJobs, resetJobForRetry, incrementKeyStat,
-  type Job, type JobType, type JobStatus,
+  type Job, type JobType, type JobStatus, type JobMeta,
 } from "./db";
 import type { JobFailureReason, WatcherEvent } from "@printer/core";
 
@@ -67,8 +67,8 @@ export class Queue {
     }, wait);
   }
 
-  async enqueue(type: JobType, payload: unknown, source: string): Promise<Job> {
-    const job = await enqueueJob(type, payload, source);
+  async enqueue(type: JobType, payload: unknown, source: string, meta?: JobMeta): Promise<Job> {
+    const job = await enqueueJob(type, payload, source, meta);
     await incrementKeyStat(source, "enqueued");
     this.announce("job:queued", job);
     this.schedule(job);
@@ -139,7 +139,10 @@ export class Queue {
   async reprintJob(id: string): Promise<Job | null> {
     const job = await getJob(id);
     if (!job || job.status !== "done") return null;
-    return this.enqueue(job.type, jobPayload(job), job.source);
+    // Preserve the original sender attribution on the reprint.
+    return this.enqueue(job.type, jobPayload(job), job.source, {
+      senderIp: job.sender_ip, senderAccount: job.sender_account,
+    });
   }
 }
 
@@ -157,7 +160,7 @@ function q(): Queue {
   return _queue;
 }
 
-export const enqueue             = (type: JobType, payload: unknown, source: string) => q().enqueue(type, payload, source);
+export const enqueue             = (type: JobType, payload: unknown, source: string, meta?: JobMeta) => q().enqueue(type, payload, source, meta);
 export const onAgentConnected    = () => q().onAgentConnected();
 export const onJobStarted        = (id: string) => q().onJobStarted(id);
 export const onJobDone           = (id: string) => q().onJobDone(id);
@@ -192,5 +195,7 @@ export function publicJob(job: Job, full = false) {
     created_at:  job.created_at,
     updated_at:  job.updated_at,
     image_url:   job.image_url,
+    sender_ip:      job.sender_ip,
+    sender_account: job.sender_account,
   };
 }

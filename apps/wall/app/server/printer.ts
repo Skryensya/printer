@@ -52,7 +52,10 @@ function ingestRateHeaders(h: Headers): void {
   });
 }
 
-export async function sendMessage(message: string, from: string): Promise<SendResult> {
+export async function sendMessage(
+  message: string, from: string,
+  senderIp?: string, senderAccount?: string | null,
+): Promise<SendResult> {
   if (!config.apiKey) {
     return { ok: false, status: 0, jobId: null, error: "WALL_API_KEY not configured" };
   }
@@ -65,7 +68,10 @@ export async function sendMessage(message: string, from: string): Promise<SendRe
         "Content-Type": "application/json",
         "X-API-Key":    config.apiKey,
       },
-      body: JSON.stringify({ message, from }),
+      // Relay the real end user so the API can attribute the job (the request
+      // IP it sees is the wall's, not the sender's). sender_account = login
+      // name when signed in; null/omitted = anonymous.
+      body: JSON.stringify({ message, from, sender_ip: senderIp, sender_account: senderAccount }),
     });
   } catch (e) {
     return { ok: false, status: 0, jobId: null, error: e instanceof Error ? e.message : "Network error" };

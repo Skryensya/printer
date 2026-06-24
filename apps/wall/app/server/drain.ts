@@ -27,7 +27,7 @@ async function tick(): Promise<void> {
     // user may send a photo with no text, so the message step is optional.
     let result = { ok: true, status: 200, jobId: null as string | null, error: null as string | null };
     if (entry.message.trim()) {
-      result = await sendMessage(entry.message, entry.from);
+      result = await sendMessage(entry.message, entry.from, entry.ip, entry.username);
     }
 
     if (result.ok) {
