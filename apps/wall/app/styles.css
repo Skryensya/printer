@@ -165,6 +165,11 @@
       radial-gradient(102% 90% at 6% 96%,  color-mix(in oklch, #da702c 14%, transparent) 0%, color-mix(in oklch, #da702c  7%, transparent) 44%, transparent 90%);
   }
 
+  /* When the WebGL shader background mounts it paints the same colour mesh as a
+     flowing liquid, so the static CSS mesh hands off to it. The film grain
+     (body::after) stays on top either way. */
+  [data-shader-bg="on"] body::before { display: none; }
+
   /* Faint film grain over the mesh — breaks gradient banding and gives the wash
      a printed, risograph texture instead of a smooth digital look. */
   body::after {

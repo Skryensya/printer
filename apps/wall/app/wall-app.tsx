@@ -10,6 +10,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { playSound } from "~/lib/sound-engine";
 import { select006Sound } from "~/lib/select-006";
 import { dict, timeAgo, formatCooldown, type Lang, type Dict } from "~/lib/i18n";
+import { ShaderBackground } from "~/components/shader-background";
 
 const MAX = 240;
 
@@ -449,6 +450,8 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
 
   return (
     <div lang={t.htmlLang} className="mx-auto flex min-h-screen w-full max-w-[420px] flex-col px-5 py-14 sm:py-20">
+
+      <ShaderBackground />
 
       {/* Header */}
       <header className="flex items-center justify-between">
