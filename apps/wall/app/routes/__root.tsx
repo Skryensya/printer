@@ -12,6 +12,10 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      // Keep the wall out of search engines — it's a personal inbox, not a page
+      // meant to be found. noindex lets crawlers read the tag (unlike a
+      // robots.txt block) and drop it from results.
+      { name: "robots", content: "noindex, nofollow" },
       { title: "ping · mándame algo a la impresora" },
       { name: "description", content: "Mándame un ping: escribe un mensaje y sale impreso en papel, en la impresora térmica que tengo en mi escritorio." },
     ],
