@@ -25,11 +25,12 @@ async function tick(): Promise<void> {
 
     let result = { ok: true, status: 200, jobId: null as string | null, error: null as string | null };
 
-    // Anonymous pings get the sender's real IP and "anon" stamped as plain text
-    // directly above the card — same job, so it hugs the card with no extra
-    // feed/cut between them — regardless of the display name they chose.
-    // Logged-in accounts are trusted and get no header.
-    const header = entry.username ? undefined : `anon\nIP: ${entry.ip}`;
+    // Every ping gets the sender's real IP stamped as plain text directly above
+    // the card — same job, so it hugs the card with no extra feed/cut. Anon
+    // pings are also flagged "anon" (regardless of the display name they chose);
+    // logged-in pings show just the IP (the account name is already the card's
+    // FROM).
+    const header = entry.username ? `IP: ${entry.ip}` : `anon\nIP: ${entry.ip}`;
 
     // Print the message (if any), then the attached photo (if any). A logged-in
     // user may send a photo with no text, so the message step is optional.
