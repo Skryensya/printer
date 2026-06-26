@@ -450,7 +450,7 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
     try { await hidePingFn({ data: { id } }); } catch { /* reappears on next poll if it failed */ }
   }
 
-  const hint = user ? "" : onCooldown ? formatCooldown(cooldown) : t.quotaHint;
+  const hint = user ? "" : onCooldown ? t.nextPingIn(formatCooldown(cooldown)) : t.quotaHint;
 
   return (
     <div lang={t.htmlLang} className="mx-auto flex min-h-screen w-full max-w-[420px] flex-col px-5 py-14 sm:py-20">
