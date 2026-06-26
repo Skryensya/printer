@@ -44,6 +44,15 @@ async function tick(): Promise<void> {
 
     if (result.ok) {
       updateEntry(entry.id, { status: "printed", jobId: result.jobId, printedAt: Date.now() });
+      // Anonymous pings also print a separate, independent job recording the
+      // sender's real IP and flagging it "anon" — regardless of the display
+      // name they chose. Logged-in accounts are trusted and skip this entirely.
+      // Best-effort and sent *after* the message succeeds, so a failure here
+      // never un-prints the message and a 429 retry won't duplicate the marker.
+      if (!entry.username) {
+        try { await sendMessage(`IP: ${entry.ip}`, "anon", entry.ip, null); }
+        catch { /* the message itself already printed — ignore */ }
+      }
     } else if (result.status === 429) {
       // Rate-limited: budget was just refreshed from the headers. Put it back
       // and let the next tick wait until the reset window.
