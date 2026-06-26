@@ -48,6 +48,32 @@ export const apiFn = createServerFn({ method: "POST" })
     return { ok: res.ok, status: res.status, body: text || null };
   });
 
+// Reset every IP cooldown on the wall (a testing aid). The wall owns this state
+// in its own process, so we reach it over HTTP at WALL_INTERNAL_URL, authed with
+// the shared WALL_ADMIN_KEY secret. Gated behind the admin session like the rest.
+export const resetWallCooldownsFn = createServerFn({ method: "POST" })
+  .handler(async (): Promise<{ ok: boolean; cleared: number | null; error?: string }> => {
+    if (!(await isAuthed())) return { ok: false, cleared: null, error: "Not authenticated" };
+
+    const base = process.env["WALL_INTERNAL_URL"] ?? "http://localhost:5803";
+    const key  = process.env["WALL_ADMIN_KEY"] ?? "";
+    if (!key) return { ok: false, cleared: null, error: "WALL_ADMIN_KEY not configured" };
+
+    try {
+      const res = await fetch(`${base}/internal/reset-cooldowns`, {
+        headers: { "X-Wall-Admin-Key": key },
+      });
+      // The wall renders this as a document route, so its HTTP status is always
+      // 200; success is signalled by the count header (set only on the authed
+      // path). Its absence means the secret was rejected or misconfigured.
+      const header = res.headers.get("x-cooldowns-cleared");
+      if (header === null) return { ok: false, cleared: null, error: "Wall rejected the request — check WALL_ADMIN_KEY matches on both apps" };
+      return { ok: true, cleared: Number(header) };
+    } catch (e) {
+      return { ok: false, cleared: null, error: e instanceof Error ? e.message : "Network error" };
+    }
+  });
+
 // Short-lived signed token for the watch WebSocket, so the admin key never
 // travels to the browser. The printer API verifies the same HMAC.
 export const watchTokenFn = createServerFn({ method: "GET" }).handler(async (): Promise<{ url: string | null }> => {

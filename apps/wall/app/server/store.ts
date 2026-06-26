@@ -182,6 +182,17 @@ export function clearCooldown(ip: string): void {
   scheduleSave();
 }
 
+// Wipe every IP's cooldown at once. A testing aid, triggered from the admin's
+// "reset wall cooldowns" button, so the 30-min lockout doesn't get in the way of
+// repeated test pings. Returns how many cooldowns were cleared.
+export function clearAllCooldowns(): number {
+  const s = getState();
+  const n = Object.keys(s.cooldowns).length;
+  s.cooldowns = {};
+  scheduleSave();
+  return n;
+}
+
 // ─── Queue ──────────────────────────────────────────────────────────────────
 
 export function enqueue(

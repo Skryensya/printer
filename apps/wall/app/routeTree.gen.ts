@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as EsRouteImport } from './routes/es'
 import { Route as EnRouteImport } from './routes/en'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InternalResetCooldownsRouteImport } from './routes/internal.reset-cooldowns'
 
 const EsRoute = EsRouteImport.update({
   id: '/es',
@@ -28,35 +29,44 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InternalResetCooldownsRoute = InternalResetCooldownsRouteImport.update({
+  id: '/internal/reset-cooldowns',
+  path: '/internal/reset-cooldowns',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/en': typeof EnRoute
   '/es': typeof EsRoute
+  '/internal/reset-cooldowns': typeof InternalResetCooldownsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/en': typeof EnRoute
   '/es': typeof EsRoute
+  '/internal/reset-cooldowns': typeof InternalResetCooldownsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/en': typeof EnRoute
   '/es': typeof EsRoute
+  '/internal/reset-cooldowns': typeof InternalResetCooldownsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/en' | '/es'
+  fullPaths: '/' | '/en' | '/es' | '/internal/reset-cooldowns'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/en' | '/es'
-  id: '__root__' | '/' | '/en' | '/es'
+  to: '/' | '/en' | '/es' | '/internal/reset-cooldowns'
+  id: '__root__' | '/' | '/en' | '/es' | '/internal/reset-cooldowns'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EnRoute: typeof EnRoute
   EsRoute: typeof EsRoute
+  InternalResetCooldownsRoute: typeof InternalResetCooldownsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/internal/reset-cooldowns': {
+      id: '/internal/reset-cooldowns'
+      path: '/internal/reset-cooldowns'
+      fullPath: '/internal/reset-cooldowns'
+      preLoaderRoute: typeof InternalResetCooldownsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EnRoute: EnRoute,
   EsRoute: EsRoute,
+  InternalResetCooldownsRoute: InternalResetCooldownsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

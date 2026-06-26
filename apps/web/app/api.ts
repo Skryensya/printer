@@ -1,7 +1,7 @@
 // Client API. No system keys live here — every call that needs the admin or
 // service key goes through the server-side proxy (app/server/printer.ts), so the
 // keys stay on the web server and never reach the browser bundle.
-import { apiFn, watchTokenFn, type ProxyResult } from "./server/printer";
+import { apiFn, watchTokenFn, resetWallCooldownsFn, type ProxyResult } from "./server/printer";
 
 // VITE_API_URL is a public URL (not a secret) — only used for the docs page,
 // where the user pastes their OWN key (not a system key).
@@ -253,6 +253,15 @@ export async function createWallUser(params: { username: string; password: strin
 
 export function deleteWallUser(username: string) {
   return del(`/api/v1/wall/users/${encodeURIComponent(username)}`, true);
+}
+
+// Wipe every IP cooldown on the wall — a testing aid so the 30-min lockout
+// doesn't block repeated test pings. Returns how many were cleared (null if the
+// wall didn't report a count).
+export async function resetWallCooldowns(): Promise<number | null> {
+  const r = (await resetWallCooldownsFn()) as { ok: boolean; cleared: number | null; error?: string };
+  if (!r.ok) throw new Error(r.error ?? "Could not reset cooldowns");
+  return r.cleared;
 }
 
 // ─── WebSocket URL ────────────────────────────────────────────────────────────
