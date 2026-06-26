@@ -6,7 +6,7 @@
 // server function handlers — so it only ever runs on the long-lived node server.
 
 import { config } from "./config";
-import { sendMessage, sendImage } from "./printer";
+import { sendMessage, sendImage, sendText } from "./printer";
 import { nextPending, updateEntry, budgetExhausted, clearCooldown, getImage, dropImage, ensurePhotoSweep } from "./store";
 
 let started = false;
@@ -23,9 +23,30 @@ async function tick(): Promise<void> {
   try {
     updateEntry(entry.id, { status: "printing" });
 
+    let result = { ok: true, status: 200, jobId: null as string | null, error: null as string | null };
+
+    // Anonymous pings get a separate, independent plain-text marker — the
+    // sender's real IP and "anon" — printed ABOVE the message, regardless of
+    // the display name they chose. Logged-in accounts are trusted and skip it.
+    // Sent first so it comes out on top; markerSent stops a 429 retry from
+    // printing a second marker. If the marker can't be placed we requeue the
+    // whole entry (rather than printing the message marker-less).
+    if (!entry.username && !entry.markerSent) {
+      const marker = await sendText(`anon\nIP: ${entry.ip}`);
+      if (!marker.ok) {
+        if (marker.status === 429) {
+          updateEntry(entry.id, { status: "pending" });
+        } else {
+          updateEntry(entry.id, { status: "failed", error: marker.error });
+          clearCooldown(entry.ip);
+        }
+        return;
+      }
+      updateEntry(entry.id, { markerSent: true });
+    }
+
     // Print the message (if any), then the attached photo (if any). A logged-in
     // user may send a photo with no text, so the message step is optional.
-    let result = { ok: true, status: 200, jobId: null as string | null, error: null as string | null };
     if (entry.message.trim()) {
       result = await sendMessage(entry.message, entry.from, entry.ip, entry.username);
     }
@@ -44,15 +65,6 @@ async function tick(): Promise<void> {
 
     if (result.ok) {
       updateEntry(entry.id, { status: "printed", jobId: result.jobId, printedAt: Date.now() });
-      // Anonymous pings also print a separate, independent job recording the
-      // sender's real IP and flagging it "anon" — regardless of the display
-      // name they chose. Logged-in accounts are trusted and skip this entirely.
-      // Best-effort and sent *after* the message succeeds, so a failure here
-      // never un-prints the message and a 429 retry won't duplicate the marker.
-      if (!entry.username) {
-        try { await sendMessage(`IP: ${entry.ip}`, "anon", entry.ip, null); }
-        catch { /* the message itself already printed — ignore */ }
-      }
     } else if (result.status === 429) {
       // Rate-limited: budget was just refreshed from the headers. Put it back
       // and let the next tick wait until the reset window.
