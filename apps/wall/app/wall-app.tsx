@@ -516,7 +516,7 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
               e.currentTarget.form?.requestSubmit();
             }
           }}
-          placeholder={t.messagePlaceholder} rows={4} disabled={sending || onCooldown}
+          placeholder={t.messagePlaceholder} rows={4} disabled={sending}
           className="min-h-28 resize-none border-0 bg-transparent px-4 py-3.5 text-[15px] leading-relaxed shadow-none focus-visible:ring-0" />
 
         {/* Photo preview (logged-in, when attached) */}
