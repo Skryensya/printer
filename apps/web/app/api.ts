@@ -278,6 +278,7 @@ export const getWallControls   = ()                  => wallControl({ action: "s
 export const setWallAnonBlocked = (blocked: boolean) => wallControl({ action: "set-anon", value: blocked ? "block" : "allow" });
 export const blockWallIp       = (ip: string)        => wallControl({ action: "block-ip", ip });
 export const unblockWallIp     = (ip: string)        => wallControl({ action: "unblock-ip", ip });
+export const setWallCooldown   = (ms: number)        => wallControl({ action: "set-cooldown", value: String(ms) });
 
 // ─── WebSocket URL ────────────────────────────────────────────────────────────
 

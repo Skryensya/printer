@@ -77,7 +77,7 @@ export const resetWallCooldownsFn = createServerFn({ method: "POST" })
 // Anti-abuse controls on the wall (pause anon pings, block IPs). Same channel as
 // resetWallCooldownsFn: reach the wall over HTTP, authed with WALL_ADMIN_KEY.
 // The wall returns the full controls state as a base64-JSON response header.
-export interface WallControls { anonBlocked: boolean; blockedIps: string[] }
+export interface WallControls { anonBlocked: boolean; blockedIps: string[]; cooldownMs: number }
 
 export const wallControlFn = createServerFn({ method: "POST" })
   .validator((d: { action?: string; ip?: string; value?: string }) => d)

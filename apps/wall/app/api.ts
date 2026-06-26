@@ -18,6 +18,7 @@ export interface WallSnapshot {
   cooldownRemaining: number;       // ms left before this viewer can post again
   user:              string | null; // logged-in account name; null = anonymous
   anonPaused:        boolean;      // anon submissions are currently blocked for this visitor
+  cooldownMs:        number;       // current per-IP cooldown window (for the idle hint)
 }
 
 export interface SubmitInput {
@@ -48,7 +49,7 @@ function clientIp(): string {
 // ─── fetchWall ────────────────────────────────────────────────────────────────
 
 export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): Promise<WallSnapshot> => {
-  const { listQueueForIp, listQueueForUser, cooldownRemaining, anonAllowed } = await import("./server/store");
+  const { listQueueForIp, listQueueForUser, cooldownRemaining, anonAllowed, cooldownWindowMs } = await import("./server/store");
   const { ensureDrain } = await import("./server/drain");
   const { currentUser } = await import("./server/auth");
   ensureDrain();
@@ -73,6 +74,7 @@ export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): P
     // Logged-in accounts are never paused; anon is paused if globally blocked
     // or this IP is on the blocklist.
     anonPaused:        !user && !anonAllowed(ip),
+    cooldownMs:        cooldownWindowMs(),
   };
 });
 
@@ -137,7 +139,7 @@ export const submitMessageFn = createServerFn({ method: "POST" })
   .validator((data: SubmitInput) => data)
   .handler(async ({ data }): Promise<SubmitResult> => {
     const { config } = await import("./server/config");
-    const { cooldownRemaining, recordSubmission, enqueue, anonAllowed } = await import("./server/store");
+    const { cooldownRemaining, recordSubmission, enqueue, anonAllowed, cooldownWindowMs } = await import("./server/store");
     const { verifyRecaptcha } = await import("./server/recaptcha");
     const { ensureDrain } = await import("./server/drain");
     const { currentUser } = await import("./server/auth");
@@ -157,7 +159,7 @@ export const submitMessageFn = createServerFn({ method: "POST" })
       const looksLikeBot = data.website.trim() !== "" || data.elapsedMs < config.minFillMs;
       if (looksLikeBot) {
         recordSubmission(ip);
-        return { ok: true, id: "dropped", cooldownRemaining: config.cooldownMs };
+        return { ok: true, id: "dropped", cooldownRemaining: cooldownWindowMs() };
       }
     }
 
@@ -200,5 +202,5 @@ export const submitMessageFn = createServerFn({ method: "POST" })
     const entry = enqueue(message, from, ip, user?.username ?? null, image);
     ensureDrain();
 
-    return { ok: true, id: entry.id, cooldownRemaining: user ? 0 : config.cooldownMs };
+    return { ok: true, id: entry.id, cooldownRemaining: user ? 0 : cooldownWindowMs() };
   });

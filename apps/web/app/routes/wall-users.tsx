@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Users, Plus, Trash2, Loader2, TimerReset, ShieldBan, ShieldCheck, Ban, Megaphone } from "lucide-react";
 import {
   listWallUsers, createWallUser, deleteWallUser, resetWallCooldowns,
-  getWallControls, setWallAnonBlocked, blockWallIp, unblockWallIp,
+  getWallControls, setWallAnonBlocked, blockWallIp, unblockWallIp, setWallCooldown,
   type WallUser, type WallControls,
 } from "~/api";
 import { Button } from "~/components/ui/button";
@@ -132,36 +132,69 @@ function UsersTab() {
 
 // ─── Cooldowns tab ──────────────────────────────────────────────────────────
 
-// Testing aid: wipes the wall's 30-min per-IP cooldowns so you can fire repeated
-// test pings without waiting one out.
-function CooldownsTab() {
-  const [busy, setBusy] = useState(false);
+const COOLDOWN_PRESETS = [1, 3, 5, 10, 30, 60]; // minutes
+
+// Cooldowns tab: pick the per-IP cooldown window, and wipe all current cooldowns.
+function CooldownsTab({ controls, busy, err, run }: ControlsProps) {
+  const [busyReset, setBusyReset] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
+  const currentMin = controls ? Math.round(controls.cooldownMs / 60000) : null;
+
   async function reset() {
-    setBusy(true); setMsg(null);
+    setBusyReset(true); setMsg(null);
     try {
       const cleared = await resetWallCooldowns();
       setMsg({ kind: "ok", text: cleared === null ? "Cooldowns reseteados" : `Reseteados ${cleared} cooldown${cleared === 1 ? "" : "s"}` });
-    } catch (err) {
-      setMsg({ kind: "err", text: err instanceof Error ? err.message : "No se pudo resetear" });
-    } finally { setBusy(false); }
+    } catch (e) {
+      setMsg({ kind: "err", text: e instanceof Error ? e.message : "No se pudo resetear" });
+    } finally { setBusyReset(false); }
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-3 flex-wrap">
-      <div className="space-y-0.5">
-        <p className="text-sm font-medium">Reset cooldowns del wall</p>
-        <p className="text-xs text-muted-foreground">Borra los timeouts de 30 min por IP, para probar pings sin esperar.</p>
+    <div className="space-y-4">
+      {/* Cooldown window */}
+      <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">Cooldown por IP</p>
+          <p className="text-xs text-muted-foreground">Tiempo de espera entre pings anónimos desde la misma IP.</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {COOLDOWN_PRESETS.map(min => {
+            const active = currentMin === min;
+            return (
+              <Button
+                key={min}
+                size="sm"
+                variant={active ? "default" : "secondary"}
+                disabled={busy || controls === null}
+                onClick={() => run(() => setWallCooldown(min * 60000))}
+                className="min-w-14"
+              >
+                {min} min
+              </Button>
+            );
+          })}
+          {busy && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+        </div>
+        {err && <p className="text-xs text-destructive">{err}</p>}
       </div>
-      <div className="ml-auto flex items-center gap-2.5">
-        {msg && (
-          <span className={`text-xs ${msg.kind === "ok" ? "text-muted-foreground" : "text-destructive"}`}>{msg.text}</span>
-        )}
-        <Button size="sm" variant="secondary" onClick={reset} disabled={busy} className="gap-1.5">
-          {busy ? <Loader2 size={14} className="animate-spin" /> : <TimerReset size={14} />}
-          Resetear
-        </Button>
+
+      {/* Reset current cooldowns */}
+      <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-3 flex-wrap">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">Resetear cooldowns activos</p>
+          <p className="text-xs text-muted-foreground">Borra los timeouts vigentes por IP, para probar pings sin esperar.</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2.5">
+          {msg && (
+            <span className={`text-xs ${msg.kind === "ok" ? "text-muted-foreground" : "text-destructive"}`}>{msg.text}</span>
+          )}
+          <Button size="sm" variant="secondary" onClick={reset} disabled={busyReset} className="gap-1.5">
+            {busyReset ? <Loader2 size={14} className="animate-spin" /> : <TimerReset size={14} />}
+            Resetear
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -286,7 +319,7 @@ function WallUsersPage() {
           </TabsList>
 
           <TabsContent value="users"><UsersTab /></TabsContent>
-          <TabsContent value="cooldowns"><CooldownsTab /></TabsContent>
+          <TabsContent value="cooldowns"><CooldownsTab {...controlsProps} /></TabsContent>
           <TabsContent value="public"><PublicPingsTab {...controlsProps} /></TabsContent>
           <TabsContent value="ips"><BlockedIpsTab {...controlsProps} /></TabsContent>
         </Tabs>

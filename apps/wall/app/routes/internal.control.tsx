@@ -25,9 +25,10 @@ const controlFn = createServerFn({ method: "GET" }).handler(async () => {
 
   const store = await import("~/server/store");
   switch (action) {
-    case "set-anon":   store.setAnonBlocked(value === "block"); break;
-    case "block-ip":   store.blockIp(ip);   break;
-    case "unblock-ip": store.unblockIp(ip); break;
+    case "set-anon":     store.setAnonBlocked(value === "block"); break;
+    case "block-ip":     store.blockIp(ip);   break;
+    case "unblock-ip":   store.unblockIp(ip); break;
+    case "set-cooldown": store.setCooldownMs(Number(value)); break;
     // "status" / unknown → just read
   }
 

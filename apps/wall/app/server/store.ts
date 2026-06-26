@@ -114,6 +114,7 @@ export interface Budget {
 export interface Controls {
   anonBlocked: boolean;
   blockedIps:  string[];
+  cooldownMs:  number;  // per-IP cooldown window for anon pings (admin-configurable)
 }
 
 interface State {
@@ -130,7 +131,7 @@ function emptyState(): State {
     queue:     [],
     cooldowns: {},
     budget:    { remainingMinute: null, resetMinuteAt: 0, remainingDay: null, resetDayAt: 0 },
-    controls:  { anonBlocked: false, blockedIps: [] },
+    controls:  { anonBlocked: false, blockedIps: [], cooldownMs: config.cooldownMs },
   };
 }
 
@@ -181,7 +182,13 @@ function scheduleSave(): void {
 export function cooldownRemaining(ip: string, now = Date.now()): number {
   const last = getState().cooldowns[ip];
   if (last === undefined) return 0;
-  return Math.max(0, last + config.cooldownMs - now);
+  return Math.max(0, last + getState().controls.cooldownMs - now);
+}
+
+// The current cooldown window (ms). Admin-configurable; falls back to the env
+// default until changed.
+export function cooldownWindowMs(): number {
+  return getState().controls.cooldownMs;
 }
 
 export function recordSubmission(ip: string, now = Date.now()): void {
@@ -229,6 +236,14 @@ export function blockIp(ip: string): void {
 export function unblockIp(ip: string): void {
   const c = getState().controls;
   c.blockedIps = c.blockedIps.filter(x => x !== ip.trim());
+  scheduleSave();
+}
+
+// Set the per-IP cooldown window. Clamped to a sane range (1s–24h) so a bad
+// value can't lock everyone out forever or disable the limit entirely.
+export function setCooldownMs(ms: number): void {
+  if (!Number.isFinite(ms)) return;
+  getState().controls.cooldownMs = Math.min(24 * 60 * 60 * 1000, Math.max(1000, Math.round(ms)));
   scheduleSave();
 }
 
