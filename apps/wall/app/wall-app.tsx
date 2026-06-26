@@ -505,7 +505,7 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
           </p>
         ) : (
           <input value={from} onChange={e => setFrom(e.target.value)}
-            placeholder={t.namePlaceholder} maxLength={24} disabled={sending || onCooldown}
+            placeholder={t.namePlaceholder} maxLength={24} disabled={sending}
             className="w-full border-b border-border bg-transparent px-4 py-3 text-sm outline-none placeholder:text-muted-foreground/50" />
         )}
 
