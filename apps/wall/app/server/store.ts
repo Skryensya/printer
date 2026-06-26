@@ -25,7 +25,6 @@ export interface QueueEntry {
   imageJobId: string | null;     // image print job id — used to read its R2 url
   error:     string | null;
   hidden:    boolean;            // owner hid it from their history (still printed/archived)
-  markerSent: boolean;          // anon-only: the IP+anon text marker already printed (don't re-send on retry)
 }
 
 // Attached photos live in memory only — NOT persisted to the JSON state file
@@ -215,7 +214,6 @@ export function enqueue(
     imageJobId: null,
     error:      null,
     hidden:     false,
-    markerSent: false,
   };
   if (image) {
     pendingImages.set(entry.id, image);   // full payload to print (dropped after)

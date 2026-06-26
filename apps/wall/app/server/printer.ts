@@ -55,6 +55,7 @@ function ingestRateHeaders(h: Headers): void {
 export async function sendMessage(
   message: string, from: string,
   senderIp?: string, senderAccount?: string | null,
+  header?: string,
 ): Promise<SendResult> {
   if (!config.apiKey) {
     return { ok: false, status: 0, jobId: null, error: "WALL_API_KEY not configured" };
@@ -71,7 +72,7 @@ export async function sendMessage(
       // Relay the real end user so the API can attribute the job (the request
       // IP it sees is the wall's, not the sender's). sender_account = login
       // name when signed in; null/omitted = anonymous.
-      body: JSON.stringify({ message, from, sender_ip: senderIp, sender_account: senderAccount }),
+      body: JSON.stringify({ message, from, sender_ip: senderIp, sender_account: senderAccount, header }),
     });
   } catch (e) {
     return { ok: false, status: 0, jobId: null, error: e instanceof Error ? e.message : "Network error" };
@@ -84,28 +85,6 @@ export async function sendMessage(
   if (res.ok) {
     return { ok: true, status: res.status, jobId: data.id ?? null, error: null };
   }
-  return { ok: false, status: res.status, jobId: null, error: data.error ?? `HTTP ${res.status}` };
-}
-
-// Send a plain-text job (no card chrome) — used for the anon IP marker that
-// prints above the message.
-export async function sendText(text: string): Promise<SendResult> {
-  if (!config.apiKey) {
-    return { ok: false, status: 0, jobId: null, error: "WALL_API_KEY not configured" };
-  }
-  let res: Response;
-  try {
-    res = await fetch(`${config.apiUrl}/api/v1/print/text`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
-      body: JSON.stringify({ text, size: 1 }),
-    });
-  } catch (e) {
-    return { ok: false, status: 0, jobId: null, error: e instanceof Error ? e.message : "Network error" };
-  }
-  ingestRateHeaders(res.headers);
-  const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
-  if (res.ok) return { ok: true, status: res.status, jobId: data.id ?? null, error: null };
   return { ok: false, status: res.status, jobId: null, error: data.error ?? `HTTP ${res.status}` };
 }
 

@@ -14,7 +14,10 @@ export type JobType = typeof JOB_TYPES[number];
 
 export interface JobPayloadMap {
   text:    { v: number; text: string; align?: string; bold?: boolean; size?: number; invert?: boolean };
-  ticket:  { v: number } & CardData;
+  // `header`: optional plain-text lines printed above the card, in the SAME job
+  // (no extra feed/cut between). Used by the wall to stamp anon pings with the
+  // sender's IP right on top of the card. Relay-only (set server-side).
+  ticket:  { v: number; header?: string } & CardData;
   // A to-do is its own job type but renders as a card. The payload keeps the
   // original request shape so it stays replicable as POST /print/todo.
   todo:    { v: number; items: TodoItem[]; title?: string; badge?: string };
@@ -42,16 +45,17 @@ export function buildTextPayload(b: {
   };
 }
 
-export function buildTicketPayload(b: CardData): JobPayloadMap["ticket"] {
+export function buildTicketPayload(b: CardData, header?: string): JobPayloadMap["ticket"] {
   return {
-    v:     1,
-    title: b.title,
-    badge: b.badge,
-    from:  b.from,
-    label: b.label,
-    date:  b.date,
-    rows:  b.rows,
-    qr:    b.qr,
+    v:      1,
+    header: header?.trim() || undefined,
+    title:  b.title,
+    badge:  b.badge,
+    from:   b.from,
+    label:  b.label,
+    date:   b.date,
+    rows:   b.rows,
+    qr:     b.qr,
   };
 }
 
@@ -128,7 +132,12 @@ export async function buildJobCommands(type: JobType, payload: unknown): Promise
     case "ticket": {
       const b = payload as JobPayloadMap["ticket"];
       const bands = await buildCardTicket(b);
-      return [cmd.alignCenter(), ...bands];
+      // Optional plain-text header sits directly above the card — left-aligned,
+      // no blank line, so it hugs the card with minimal spacing.
+      const head = b.header
+        ? [cmd.alignLeft(), cmd.bold(false), ...b.header.split("\n").map(l => line(l))]
+        : [];
+      return [...head, cmd.alignCenter(), ...bands];
     }
     case "todo": {
       const b = payload as JobPayloadMap["todo"];

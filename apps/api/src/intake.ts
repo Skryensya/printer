@@ -77,14 +77,16 @@ export async function intakeMessage(
   source: string,
   customFromAllowed: boolean,
 ): Promise<IntakeResult> {
-  const b = body as { message?: string; from?: string; sender_ip?: string; sender_account?: string | null } | null;
+  const b = body as { message?: string; from?: string; sender_ip?: string; sender_account?: string | null; header?: string } | null;
   if (!b?.message?.trim()) return reject("body.message is required");
   const from = customFromAllowed && b.from?.trim() ? b.from.trim() : source;
   const card: CardData = { title: b.message.trim(), from, date: santiagoTime() };
   // Only a trusted relay (the custom-from grant) may attribute a job to an end
-  // user; without it we ignore any sender_* the caller claims.
+  // user or stamp a plain-text header on it; without it we ignore any sender_*
+  // / header the caller claims.
+  const header = customFromAllowed ? b.header?.trim() || undefined : undefined;
   const meta = customFromAllowed
     ? { senderIp: b.sender_ip?.trim() || null, senderAccount: b.sender_account?.trim() || null }
     : undefined;
-  return { ok: true, job: await enqueue("ticket", buildTicketPayload(card), source, meta) };
+  return { ok: true, job: await enqueue("ticket", buildTicketPayload(card, header), source, meta) };
 }

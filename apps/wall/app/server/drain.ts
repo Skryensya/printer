@@ -6,7 +6,7 @@
 // server function handlers — so it only ever runs on the long-lived node server.
 
 import { config } from "./config";
-import { sendMessage, sendImage, sendText } from "./printer";
+import { sendMessage, sendImage } from "./printer";
 import { nextPending, updateEntry, budgetExhausted, clearCooldown, getImage, dropImage, ensurePhotoSweep } from "./store";
 
 let started = false;
@@ -25,30 +25,16 @@ async function tick(): Promise<void> {
 
     let result = { ok: true, status: 200, jobId: null as string | null, error: null as string | null };
 
-    // Anonymous pings get a separate, independent plain-text marker — the
-    // sender's real IP and "anon" — printed ABOVE the message, regardless of
-    // the display name they chose. Logged-in accounts are trusted and skip it.
-    // Sent first so it comes out on top; markerSent stops a 429 retry from
-    // printing a second marker. If the marker can't be placed we requeue the
-    // whole entry (rather than printing the message marker-less).
-    if (!entry.username && !entry.markerSent) {
-      const marker = await sendText(`anon\nIP: ${entry.ip}`);
-      if (!marker.ok) {
-        if (marker.status === 429) {
-          updateEntry(entry.id, { status: "pending" });
-        } else {
-          updateEntry(entry.id, { status: "failed", error: marker.error });
-          clearCooldown(entry.ip);
-        }
-        return;
-      }
-      updateEntry(entry.id, { markerSent: true });
-    }
+    // Anonymous pings get the sender's real IP and "anon" stamped as plain text
+    // directly above the card — same job, so it hugs the card with no extra
+    // feed/cut between them — regardless of the display name they chose.
+    // Logged-in accounts are trusted and get no header.
+    const header = entry.username ? undefined : `anon\nIP: ${entry.ip}`;
 
     // Print the message (if any), then the attached photo (if any). A logged-in
     // user may send a photo with no text, so the message step is optional.
     if (entry.message.trim()) {
-      result = await sendMessage(entry.message, entry.from, entry.ip, entry.username);
+      result = await sendMessage(entry.message, entry.from, entry.ip, entry.username, header);
     }
 
     if (result.ok) {
