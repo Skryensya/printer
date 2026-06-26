@@ -74,6 +74,40 @@ export const resetWallCooldownsFn = createServerFn({ method: "POST" })
     }
   });
 
+// Anti-abuse controls on the wall (pause anon pings, block IPs). Same channel as
+// resetWallCooldownsFn: reach the wall over HTTP, authed with WALL_ADMIN_KEY.
+// The wall returns the full controls state as a base64-JSON response header.
+export interface WallControls { anonBlocked: boolean; blockedIps: string[] }
+
+export const wallControlFn = createServerFn({ method: "POST" })
+  .validator((d: { action?: string; ip?: string; value?: string }) => d)
+  .handler(async ({ data }): Promise<{ ok: boolean; controls: WallControls | null; error?: string }> => {
+    if (!(await isAuthed())) return { ok: false, controls: null, error: "Not authenticated" };
+
+    const base = process.env["WALL_INTERNAL_URL"] ?? "http://localhost:5803";
+    const key  = process.env["WALL_ADMIN_KEY"] ?? "";
+    if (!key) return { ok: false, controls: null, error: "WALL_ADMIN_KEY not configured" };
+
+    const qs = new URLSearchParams();
+    if (data.action) qs.set("action", data.action);
+    if (data.ip)     qs.set("ip", data.ip);
+    if (data.value)  qs.set("value", data.value);
+
+    try {
+      const res = await fetch(`${base}/internal/control?${qs.toString()}`, {
+        headers: { "X-Wall-Admin-Key": key },
+      });
+      // Like reset-cooldowns: the wall renders a document (status always 200),
+      // so success is signalled by the state header. Its absence = rejected.
+      const header = res.headers.get("x-wall-control");
+      if (header === null) return { ok: false, controls: null, error: "Wall rejected the request — check WALL_ADMIN_KEY matches on both apps" };
+      const controls = JSON.parse(Buffer.from(header, "base64").toString("utf8")) as WallControls;
+      return { ok: true, controls };
+    } catch (e) {
+      return { ok: false, controls: null, error: e instanceof Error ? e.message : "Network error" };
+    }
+  });
+
 // Short-lived signed token for the watch WebSocket, so the admin key never
 // travels to the browser. The printer API verifies the same HMAC.
 export const watchTokenFn = createServerFn({ method: "GET" }).handler(async (): Promise<{ url: string | null }> => {

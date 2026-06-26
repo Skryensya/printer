@@ -1,7 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Users, Plus, Trash2, Loader2, TimerReset } from "lucide-react";
-import { listWallUsers, createWallUser, deleteWallUser, resetWallCooldowns, type WallUser } from "~/api";
+import { Users, Plus, Trash2, Loader2, TimerReset, ShieldBan, ShieldCheck, Ban } from "lucide-react";
+import {
+  listWallUsers, createWallUser, deleteWallUser, resetWallCooldowns,
+  getWallControls, setWallAnonBlocked, blockWallIp, unblockWallIp,
+  type WallUser, type WallControls,
+} from "~/api";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -93,6 +97,89 @@ function ResetCooldowns() {
   );
 }
 
+// Anti-abuse: pause all anonymous pings, and block specific IPs. State lives on
+// the wall; these call through to print-admin's wall-control proxy.
+function AntiAbuse() {
+  const [controls, setControls] = useState<WallControls | null>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [ip, setIp] = useState("");
+
+  useEffect(() => {
+    getWallControls().then(setControls).catch(e => setErr(e instanceof Error ? e.message : "No se pudo cargar"));
+  }, []);
+
+  async function run(fn: () => Promise<WallControls>) {
+    setBusy(true); setErr("");
+    try { setControls(await fn()); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Falló la acción"); }
+    finally { setBusy(false); }
+  }
+
+  const blocked = controls?.anonBlocked ?? false;
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+      <div className="flex items-center gap-2.5">
+        {blocked ? <ShieldBan size={16} className="text-destructive" /> : <ShieldCheck size={16} className="text-primary" />}
+        <p className="text-sm font-medium">Anti-abuso</p>
+        {controls === null && !err && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+      </div>
+
+      {/* Global anon toggle */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="space-y-0.5">
+          <p className="text-sm">Pings anónimos: <span className={blocked ? "font-medium text-destructive" : "font-medium text-foreground"}>{blocked ? "pausados" : "activos"}</span></p>
+          <p className="text-xs text-muted-foreground">Bloquea a todos los no logueados (los logueados siguen pudiendo).</p>
+        </div>
+        <Button
+          size="sm"
+          variant={blocked ? "secondary" : "destructive"}
+          disabled={busy || controls === null}
+          onClick={() => run(() => setWallAnonBlocked(!blocked))}
+          className="ml-auto gap-1.5"
+        >
+          {busy ? <Loader2 size={14} className="animate-spin" /> : blocked ? <ShieldCheck size={14} /> : <ShieldBan size={14} />}
+          {blocked ? "Reanudar pings" : "Pausar pings"}
+        </Button>
+      </div>
+
+      {/* IP blocklist */}
+      <div className="space-y-2 border-t border-border pt-3">
+        <p className="text-xs font-medium text-muted-foreground">IPs bloqueadas</p>
+        <div className="flex items-center gap-2">
+          <Input
+            value={ip} onChange={e => setIp(e.target.value)}
+            placeholder="1.2.3.4" autoCapitalize="none" disabled={busy}
+            onKeyDown={e => { if (e.key === "Enter" && ip.trim()) { run(() => blockWallIp(ip.trim())).then(() => setIp("")); } }}
+          />
+          <Button size="sm" variant="secondary" disabled={busy || !ip.trim()} className="gap-1.5"
+            onClick={() => run(() => blockWallIp(ip.trim())).then(() => setIp(""))}>
+            <Ban size={14} /> Bloquear
+          </Button>
+        </div>
+        {controls && controls.blockedIps.length > 0 ? (
+          <ul className="space-y-1">
+            {controls.blockedIps.map(b => (
+              <li key={b} className="flex items-center gap-2 text-sm">
+                <span className="font-mono text-xs">{b}</span>
+                <button className="ml-auto text-xs text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
+                  disabled={busy} onClick={() => run(() => unblockWallIp(b))}>
+                  <Trash2 size={11} /> Quitar
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-muted-foreground/50">Ninguna IP bloqueada.</p>
+        )}
+      </div>
+
+      {err && <p className="text-xs text-destructive">{err}</p>}
+    </div>
+  );
+}
+
 function WallUsersPage() {
   const [users, setUsers] = useState<WallUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,6 +204,8 @@ function WallUsersPage() {
             People with an account skip the wall's rate limit and post under a fixed name.
           </span>
         </div>
+
+        <AntiAbuse />
 
         <ResetCooldowns />
 

@@ -394,6 +394,9 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
   const remaining = MAX - message.length;
   const nearLimit = remaining <= 40;
   const onCooldown = !user && cooldown > 0;
+  // Anon submissions paused (globally or this IP blocked) — show a calm notice
+  // instead of the composer. Logged-in accounts are never paused.
+  const anonPaused = !user && snapshot.anonPaused;
   // A logged-in user may send a photo with no text; anon needs text.
   const hasContent = message.trim().length > 0 || (!!user && !!photo);
   const canSend = !sending && !onCooldown && hasContent && remaining >= 0;
@@ -427,6 +430,10 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
         playPing();
         setTimeout(() => setJustPinged(false), 700);
         setTimeout(() => setSent(false), 3500);
+        await refresh();
+      } else if (result.unavailable) {
+        // Got paused/blocked while composing — swap to the calm notice instead
+        // of surfacing an error.
         await refresh();
       } else {
         setError(result.error);
@@ -496,7 +503,13 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
 
       {!user && showLogin && <div className="mt-5"><LoginPanel t={t} onDone={() => { setShowLogin(false); refresh(); }} /></div>}
 
-      {/* Composer — the card is the input */}
+      {/* Composer — the card is the input. Paused for anon when blocked. */}
+      {anonPaused ? (
+        <div className="mt-6 rounded-2xl border border-border bg-card px-5 py-6 shadow-sm">
+          <p className="text-sm font-medium text-foreground">{t.pausedTitle}</p>
+          <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground text-pretty">{t.pausedBody}</p>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit}
         className="mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring/60">
         {user ? (
@@ -586,6 +599,7 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
           </div>
         </div>
       </form>
+      )}
 
       {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       {sent && !error && (

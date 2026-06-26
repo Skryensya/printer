@@ -108,10 +108,19 @@ export interface Budget {
   resetDayAt:      number;   // epoch ms
 }
 
+// Anti-abuse controls, toggled from print-admin. `anonBlocked` pauses ALL
+// anonymous pings; `blockedIps` blocks specific IPs (anon or not). Logged-in
+// accounts are always allowed through.
+export interface Controls {
+  anonBlocked: boolean;
+  blockedIps:  string[];
+}
+
 interface State {
   queue:     QueueEntry[];
   cooldowns: Record<string, number>; // ip -> last accepted submission (epoch ms)
   budget:    Budget;
+  controls:  Controls;
 }
 
 const MAX_QUEUE = 200;
@@ -121,6 +130,7 @@ function emptyState(): State {
     queue:     [],
     cooldowns: {},
     budget:    { remainingMinute: null, resetMinuteAt: 0, remainingDay: null, resetDayAt: 0 },
+    controls:  { anonBlocked: false, blockedIps: [] },
   };
 }
 
@@ -136,7 +146,11 @@ function load(): State {
     if (existsSync(statePath())) {
       const raw = readFileSync(statePath(), "utf8");
       const parsed = JSON.parse(raw) as Partial<State>;
-      return { ...emptyState(), ...parsed, budget: { ...emptyState().budget, ...parsed.budget } };
+      return {
+        ...emptyState(), ...parsed,
+        budget:   { ...emptyState().budget, ...parsed.budget },
+        controls: { ...emptyState().controls, ...parsed.controls },
+      };
     }
   } catch (e) {
     console.error("[wall] failed to load state, starting fresh:", e);
@@ -191,6 +205,39 @@ export function clearAllCooldowns(): number {
   s.cooldowns = {};
   scheduleSave();
   return n;
+}
+
+// ─── Anti-abuse controls ──────────────────────────────────────────────────────
+
+export function getControls(): Controls {
+  return getState().controls;
+}
+
+export function setAnonBlocked(blocked: boolean): void {
+  getState().controls.anonBlocked = blocked;
+  scheduleSave();
+}
+
+// Normalize then add/remove an IP from the blocklist (no duplicates).
+export function blockIp(ip: string): void {
+  const c = getState().controls;
+  const v = ip.trim();
+  if (v && !c.blockedIps.includes(v)) c.blockedIps.push(v);
+  scheduleSave();
+}
+
+export function unblockIp(ip: string): void {
+  const c = getState().controls;
+  c.blockedIps = c.blockedIps.filter(x => x !== ip.trim());
+  scheduleSave();
+}
+
+// Whether an anonymous visitor from this IP may submit right now. Used both to
+// reject at submit time and to show the "paused" mode proactively. Logged-in
+// accounts bypass this entirely (checked by the caller).
+export function anonAllowed(ip: string): boolean {
+  const c = getState().controls;
+  return !c.anonBlocked && !c.blockedIps.includes(ip);
 }
 
 // ─── Queue ──────────────────────────────────────────────────────────────────

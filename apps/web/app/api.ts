@@ -1,7 +1,9 @@
 // Client API. No system keys live here — every call that needs the admin or
 // service key goes through the server-side proxy (app/server/printer.ts), so the
 // keys stay on the web server and never reach the browser bundle.
-import { apiFn, watchTokenFn, resetWallCooldownsFn, type ProxyResult } from "./server/printer";
+import { apiFn, watchTokenFn, resetWallCooldownsFn, wallControlFn, type WallControls, type ProxyResult } from "./server/printer";
+
+export type { WallControls };
 
 // VITE_API_URL is a public URL (not a secret) — only used for the docs page,
 // where the user pastes their OWN key (not a system key).
@@ -263,6 +265,19 @@ export async function resetWallCooldowns(): Promise<number | null> {
   if (!r.ok) throw new Error(r.error ?? "Could not reset cooldowns");
   return r.cleared;
 }
+
+// ─── Wall anti-abuse controls ─────────────────────────────────────────────────
+
+async function wallControl(data: { action?: string; ip?: string; value?: string }): Promise<WallControls> {
+  const r = (await wallControlFn({ data })) as { ok: boolean; controls: WallControls | null; error?: string };
+  if (!r.ok || !r.controls) throw new Error(r.error ?? "Wall control request failed");
+  return r.controls;
+}
+
+export const getWallControls   = ()                  => wallControl({ action: "status" });
+export const setWallAnonBlocked = (blocked: boolean) => wallControl({ action: "set-anon", value: blocked ? "block" : "allow" });
+export const blockWallIp       = (ip: string)        => wallControl({ action: "block-ip", ip });
+export const unblockWallIp     = (ip: string)        => wallControl({ action: "unblock-ip", ip });
 
 // ─── WebSocket URL ────────────────────────────────────────────────────────────
 

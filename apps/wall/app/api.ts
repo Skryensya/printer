@@ -17,6 +17,7 @@ export interface WallSnapshot {
   items:             WallItem[];   // ONLY the current visitor's own messages
   cooldownRemaining: number;       // ms left before this viewer can post again
   user:              string | null; // logged-in account name; null = anonymous
+  anonPaused:        boolean;      // anon submissions are currently blocked for this visitor
 }
 
 export interface SubmitInput {
@@ -32,7 +33,7 @@ export interface SubmitInput {
 
 export type SubmitResult =
   | { ok: true;  id: string; cooldownRemaining: number }
-  | { ok: false; error: string; cooldownRemaining?: number };
+  | { ok: false; error: string; cooldownRemaining?: number; unavailable?: boolean };
 
 // ─── Request helpers (server-only; call only inside handlers) ─────────────────
 
@@ -47,7 +48,7 @@ function clientIp(): string {
 // ─── fetchWall ────────────────────────────────────────────────────────────────
 
 export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): Promise<WallSnapshot> => {
-  const { listQueueForIp, listQueueForUser, cooldownRemaining } = await import("./server/store");
+  const { listQueueForIp, listQueueForUser, cooldownRemaining, anonAllowed } = await import("./server/store");
   const { ensureDrain } = await import("./server/drain");
   const { currentUser } = await import("./server/auth");
   ensureDrain();
@@ -69,6 +70,9 @@ export const fetchWallFn = createServerFn({ method: "GET" }).handler(async (): P
     // Logged-in accounts have no cooldown.
     cooldownRemaining: user ? 0 : cooldownRemaining(ip),
     user:              user?.name ?? null,
+    // Logged-in accounts are never paused; anon is paused if globally blocked
+    // or this IP is on the blocklist.
+    anonPaused:        !user && !anonAllowed(ip),
   };
 });
 
@@ -133,13 +137,20 @@ export const submitMessageFn = createServerFn({ method: "POST" })
   .validator((data: SubmitInput) => data)
   .handler(async ({ data }): Promise<SubmitResult> => {
     const { config } = await import("./server/config");
-    const { cooldownRemaining, recordSubmission, enqueue } = await import("./server/store");
+    const { cooldownRemaining, recordSubmission, enqueue, anonAllowed } = await import("./server/store");
     const { verifyRecaptcha } = await import("./server/recaptcha");
     const { ensureDrain } = await import("./server/drain");
     const { currentUser } = await import("./server/auth");
 
     const ip   = clientIp();
     const user = await currentUser();
+
+    // 0. Anti-abuse gate: anon submissions can be paused globally or per-IP from
+    // print-admin. Logged-in accounts pass through. `unavailable` tells the
+    // client to show the calm "temporarily paused" notice, not an error.
+    if (!user && !anonAllowed(ip)) {
+      return { ok: false, error: "Anonymous pings are paused right now", unavailable: true };
+    }
 
     // 1. Honeypot + timing trap. Skip for logged-in accounts (trusted).
     if (!user) {
