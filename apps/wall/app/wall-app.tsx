@@ -7,18 +7,11 @@ import { getRecaptchaToken } from "~/lib/recaptcha";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import { playSound } from "~/lib/sound-engine";
-import { select006Sound } from "~/lib/select-006";
+import { playSfx } from "~/lib/sfx";
 import { dict, timeAgo, formatCooldown, type Lang, type Dict } from "~/lib/i18n";
 import { ShaderBackground } from "~/components/shader-background";
 
 const MAX = 240;
-
-// Plays the "ping" sound (soundcn select-006) on send. Fired from the click, so
-// the audio context is allowed to start. Fire-and-forget; ignore audio errors.
-function playPing(): void {
-  void playSound(select006Sound.dataUri, { volume: 0.5 }).catch(() => { /* no audio */ });
-}
 
 // Brand mark: a dot emitting signal rings — the one bit of ambient motion.
 function PulseMark({ shoot = false }: { shoot?: boolean }) {
@@ -59,7 +52,7 @@ function LangSwitch({ lang }: { lang: Lang }) {
   const to    = lang === "es" ? "/en" : "/es";
   const other = lang === "es" ? "English" : "Español";
   return (
-    <Link to={to} aria-label={other} title={other}
+    <Link to={to} aria-label={other} title={other} onClick={() => playSfx("tap")}
       className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-accent transition-[color,background-color,transform] active:scale-[0.94]">
       <Languages size={16} />
     </Link>
@@ -72,6 +65,7 @@ function ThemeToggle({ t }: { t: Dict }) {
   function toggle() {
     const next = !dark;
     setDark(next);
+    playSfx(next ? "toggleOn" : "toggleOff");
     document.documentElement.classList.toggle("dark", next);
     try { localStorage.setItem("ping:theme", next ? "dark" : "light"); } catch {}
   }
@@ -94,9 +88,9 @@ function LoginPanel({ onDone, t }: { onDone: () => void; t: Dict }) {
     setBusy(true); setError("");
     try {
       const r = await loginFn({ data: { username, password } });
-      if (r.ok) onDone();
-      else setError(r.error ?? t.signInError);
-    } catch { setError(t.signInError); }
+      if (r.ok) { playSfx("tap"); onDone(); }
+      else { playSfx("error"); setError(r.error ?? t.signInError); }
+    } catch { playSfx("error"); setError(t.signInError); }
     finally { setBusy(false); }
   }
 
@@ -111,7 +105,7 @@ function LoginPanel({ onDone, t }: { onDone: () => void; t: Dict }) {
         <Button type="submit" disabled={busy || !username || !password} size="sm" className="rounded-full px-4">
           {busy ? <Loader2 size={14} className="animate-spin" /> : t.signIn}
         </Button>
-        <button type="button" onClick={onDone} className="text-xs text-muted-foreground hover:text-foreground">
+        <button type="button" onClick={() => { playSfx("tap"); onDone(); }} className="text-xs text-muted-foreground hover:text-foreground">
           {t.cancel}
         </button>
       </div>
@@ -146,7 +140,7 @@ function PingSlip({ id, message, from, createdAt, delay, hasImage, onHide, t }: 
         <span>ping</span>
         <div className="flex items-center gap-2">
           <span className="[font-variant-numeric:tabular-nums]">{clock}</span>
-          <button type="button" onClick={onHide} aria-label={t.slipRemove}
+          <button type="button" onClick={() => { playSfx("remove"); onHide(); }} aria-label={t.slipRemove}
             className="relative -mr-1 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/45 transition-[color,background-color,scale] hover:bg-destructive/10 hover:text-destructive active:scale-[0.96] before:absolute before:-inset-1.5 before:content-['']">
             <Trash2 size={12} />
           </button>
@@ -234,6 +228,7 @@ function CameraCapture({ onCapture, onClose, t }: {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(v, sx, sy, cw, ch, 0, 0, canvas.width, canvas.height);
+    playSfx("tap");
     onCapture(canvas.toDataURL("image/jpeg", 0.92));
   }
 
@@ -243,7 +238,7 @@ function CameraCapture({ onCapture, onClose, t }: {
         <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center text-white">
           <Camera size={28} className="opacity-70" />
           <p className="max-w-xs text-sm opacity-90">{error}</p>
-          <button onClick={onClose} className="rounded-full bg-white/15 px-5 py-2.5 text-sm font-medium active:scale-[0.96]">
+          <button onClick={() => { playSfx("tap"); onClose(); }} className="rounded-full bg-white/15 px-5 py-2.5 text-sm font-medium active:scale-[0.96]">
             {t.close}
           </button>
         </div>
@@ -251,12 +246,12 @@ function CameraCapture({ onCapture, onClose, t }: {
         <>
           {/* Top controls */}
           <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))]">
-            <button onClick={onClose} aria-label={t.close}
+            <button onClick={() => { playSfx("tap"); onClose(); }} aria-label={t.close}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-[scale] active:scale-[0.94]">
               <XIcon size={18} />
             </button>
             <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-white/55">{t.paperFormat}</span>
-            <button onClick={() => setFacing(f => (f === "environment" ? "user" : "environment"))}
+            <button onClick={() => { playSfx("tap"); setFacing(f => (f === "environment" ? "user" : "environment")); }}
               aria-label={t.switchCamera}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-[scale] active:scale-[0.94]">
               <SwitchCamera size={18} />
