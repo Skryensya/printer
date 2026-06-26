@@ -422,7 +422,7 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
         setCooldown(result.cooldownRemaining);
         setJustPinged(true);
         setSent(true);
-        playPing();
+        playSfx("send");
         setTimeout(() => setJustPinged(false), 700);
         setTimeout(() => setSent(false), 3500);
         await refresh();
@@ -431,10 +431,12 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
         // of surfacing an error.
         await refresh();
       } else {
+        playSfx("error");
         setError(result.error);
         if (result.cooldownRemaining) setCooldown(result.cooldownRemaining);
       }
     } catch (err) {
+      playSfx("error");
       setError(err instanceof Error ? err.message : t.genericError);
     } finally {
       setSending(false);
@@ -465,12 +467,12 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
         </span>
         <div className="flex items-center gap-2">
           {user ? (
-            <button onClick={async () => { await logoutFn(); refresh(); }}
+            <button onClick={async () => { playSfx("tap"); await logoutFn(); refresh(); }}
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
               {user} <LogOut size={13} />
             </button>
           ) : (
-            <button onClick={() => setShowLogin(v => !v)}
+            <button onClick={() => { playSfx("tap"); setShowLogin(v => !v); }}
               className="rounded-full px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
               {t.signIn}
             </button>
@@ -534,7 +536,7 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
               <img src={photo.preview} alt={t.photoAttachedAlt}
                 className="max-h-44 rounded-xl outline outline-1 -outline-offset-1 outline-foreground/10" />
               <button type="button" aria-label={t.removePhoto}
-                onClick={() => { setPhoto(null); if (fileRef.current) fileRef.current.value = ""; }}
+                onClick={() => { playSfx("remove"); setPhoto(null); if (fileRef.current) fileRef.current.value = ""; }}
                 className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background transition-[scale] active:scale-[0.96] shadow-[0_1px_2px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.16)] before:absolute before:-inset-2 before:content-['']">
                 <XIcon size={13} />
               </button>
@@ -562,13 +564,13 @@ export function WallApp({ lang, initial }: { lang: Lang; initial: WallSnapshot }
                 ) : (
                   <>
                     {/* Live camera — asks for permission and uses the device camera */}
-                    <button type="button" onClick={() => setCameraOpen(true)} disabled={sending}
+                    <button type="button" onClick={() => { playSfx("tap"); setCameraOpen(true); }} disabled={sending}
                       aria-label={t.cameraAria}
                       className="group inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-[color,background-color,border-color,scale] hover:border-ring/40 hover:text-foreground active:scale-[0.96] disabled:opacity-50">
                       <Camera size={15} className="transition-transform group-hover:-translate-y-px" />
                       {t.camera}
                     </button>
-                    <button type="button" onClick={() => fileRef.current?.click()} disabled={sending}
+                    <button type="button" onClick={() => { playSfx("tap"); fileRef.current?.click(); }} disabled={sending}
                       aria-label={t.attachPhoto}
                       className="group inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-[color,background-color,border-color,scale] hover:border-ring/40 hover:text-foreground active:scale-[0.96] disabled:opacity-50">
                       <ImagePlus size={15} className="transition-transform group-hover:-translate-y-px" />
