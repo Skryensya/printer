@@ -84,7 +84,7 @@ const AUTH_META: Record<AuthLevel, {
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-const BASE_URL = import.meta.env["VITE_API_URL"] ?? "http://localhost:5801";
+const BASE_URL = (import.meta.env["VITE_API_URL"] ?? "https://printer-api.skryensya.dev").replace(/\/+$/, "");
 
 const SECTIONS: Section[] = [
   {

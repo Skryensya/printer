@@ -10,7 +10,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { useSession } from "@tanstack/react-start/server";
 
 function apiBase(): string {
-  return process.env["PRINTER_API_URL"] ?? "http://localhost:5801";
+  // Defaults to prod; set PRINTER_API_URL=http://localhost:5801 in .env for local dev.
+  return (process.env["PRINTER_API_URL"] ?? "https://printer-api.skryensya.dev").replace(/\/+$/, "");
 }
 
 async function isAuthed(): Promise<boolean> {

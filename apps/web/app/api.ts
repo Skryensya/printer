@@ -7,7 +7,9 @@ export type { WallControls };
 
 // VITE_API_URL is a public URL (not a secret) — only used for the docs page,
 // where the user pastes their OWN key (not a system key).
-const BASE = import.meta.env["VITE_API_URL"] ?? "http://localhost:5801";
+// Defaults to prod; set VITE_API_URL=http://localhost:5801 in .env for local dev.
+// Trailing slashes are stripped so `${BASE}/api/...` never doubles up.
+const BASE = (import.meta.env["VITE_API_URL"] ?? "https://printer-api.skryensya.dev").replace(/\/+$/, "");
 
 // Typed wrapper around the server-fn proxy (the RPC stub returns `unknown`).
 function call(data: { method: string; path: string; body?: unknown; admin?: boolean }): Promise<ProxyResult> {

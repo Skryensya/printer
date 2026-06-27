@@ -24,7 +24,7 @@ export const Route = createFileRoute("/queue")({
 });
 
 // Public API URL — for the replicable curl shown per job. Not a secret.
-const API_BASE = import.meta.env["VITE_API_URL"] ?? "http://localhost:5801";
+const API_BASE = (import.meta.env["VITE_API_URL"] ?? "https://printer-api.skryensya.dev").replace(/\/+$/, "");
 
 // Build a curl that re-creates this job as-is. The stored `v` (payload version)
 // is dropped since it's set server-side. Image jobs are excluded (binary body).
