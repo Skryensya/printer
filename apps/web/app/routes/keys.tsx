@@ -148,6 +148,14 @@ function toDateInput(ts: number | null): string {
   return new Date(ts * 1000).toISOString().slice(0, 10);
 }
 
+// A <input type="date"> value ("YYYY-MM-DD") is a whole calendar day, so a key
+// dated today should stay valid *through* that day, not expire at its first
+// instant. Pin the expiry to end-of-day UTC; otherwise `new Date("YYYY-MM-DD")`
+// lands on 00:00Z and the key is born already expired. Round-trips via toDateInput.
+function expiresAtFromInput(date: string): number {
+  return Math.floor(Date.parse(`${date}T23:59:59.999Z`) / 1000);
+}
+
 // ─── New key modal ────────────────────────────────────────────────────────────
 
 interface KeyParams {
@@ -176,7 +184,7 @@ function NewKeyModal({ onClose, onCreated, initial }: {
     try {
       const { raw } = await createKey({
         name:               name.trim(),
-        expires_at:         expires ? Math.floor(new Date(expires).getTime() / 1000) : undefined,
+        expires_at:         expires ? expiresAtFromInput(expires) : undefined,
         rate_limit_per_min: parseLimit(perMin),
         rate_limit_per_day: parseLimit(perDay),
         allowed_types:      allowedTypes,
@@ -256,7 +264,7 @@ function EditKeyModal({ apiKey, onClose, onSaved }: {
     setError(""); setLoading(true);
     try {
       await updateKey(apiKey.id, {
-        expires_at:         expires ? Math.floor(new Date(expires).getTime() / 1000) : null,
+        expires_at:         expires ? expiresAtFromInput(expires) : null,
         rate_limit_per_min: parseLimit(perMin),
         rate_limit_per_day: parseLimit(perDay),
         allowed_types:      allowedTypes,
