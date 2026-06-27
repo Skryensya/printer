@@ -220,18 +220,25 @@ export interface KeyInfo {
   expires_at:         number | null;
 }
 
+// Outcome of validating a pasted key: its metadata, "rejected" (the API answered
+// but the key is bad/expired), or "unreachable" (couldn't reach the API at all —
+// wrong VITE_API_URL, server down, CORS). Keeping these apart matters: a network
+// failure is not the key's fault, and conflating them sends you debugging the
+// wrong thing.
+export type KeyCheck = KeyInfo | "rejected" | "unreachable";
+
 // Fetch the calling key's own metadata. The user pastes their OWN key here
 // (docs page) — it's not a system secret, so this calls the API directly.
-export async function getMyKey(apiKey: string): Promise<KeyInfo | null> {
+export async function getMyKey(apiKey: string): Promise<KeyCheck> {
+  let res: Response;
   try {
-    const res = await fetch(`${BASE}/api/v1/keys/me`, {
-      headers: { "X-API-Key": apiKey },
-    });
-    if (!res.ok) return null;
-    return res.json() as Promise<KeyInfo>;
+    res = await fetch(`${BASE}/api/v1/keys/me`, { headers: { "X-API-Key": apiKey } });
   } catch {
-    return null;
+    return "unreachable"; // never got an answer (DNS, TLS, CORS, server down)
   }
+  if (res.status === 401 || res.status === 403) return "rejected"; // bad/expired/revoked key
+  if (!res.ok) return "unreachable"; // 5xx etc — the key isn't the problem
+  return res.json() as Promise<KeyInfo>;
 }
 
 // ─── Wall accounts (admin backoffice) ─────────────────────────────────────────

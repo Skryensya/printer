@@ -6,6 +6,13 @@ function err(msg: string, status = 400): Response {
   return Response.json({ error: msg }, { status });
 }
 
+// expires_at is Unix seconds. A value at/before now would mint a key that's
+// dead on arrival — every later request just reports it "expired", with no clue
+// that it was born that way. Reject it loudly at the source instead.
+function pastExpiry(expiresAt: number | null | undefined): boolean {
+  return expiresAt != null && expiresAt <= Math.floor(Date.now() / 1000);
+}
+
 export async function listKeysHandler(_req: Request): Promise<Response> {
   return Response.json({ keys: await listApiKeys() });
 }
@@ -26,6 +33,8 @@ export async function createKeyHandler(req: Request): Promise<Response> {
     allowed_types?: string[] | null;
   } | null;
   if (!body?.name?.trim()) return err("body.name is required");
+
+  if (pastExpiry(body.expires_at)) return err("expires_at is in the past");
 
   if (body.allowed_types != null) {
     if (!Array.isArray(body.allowed_types) || body.allowed_types.some(t => !VALID_TYPES.has(t))) {
@@ -55,6 +64,8 @@ export async function updateKeyHandler(req: Request, id: string): Promise<Respon
     allowed_types?: string[] | null;
   } | null;
   if (!body || typeof body !== "object") return err("Invalid body");
+
+  if (pastExpiry(body.expires_at)) return err("expires_at is in the past");
 
   if ("allowed_types" in body && body.allowed_types != null) {
     if (!Array.isArray(body.allowed_types) || body.allowed_types.some(t => !VALID_TYPES.has(t))) {

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Lock, ShieldCheck, KeyRound, Copy, Check, Upload, X, AlertCircle, CheckCircle2 } from "lucide-react";
-import { getMyKey, type KeyInfo } from "~/api";
+import { getMyKey, type KeyInfo, type KeyCheck } from "~/api";
 import { fetchSessionFn } from "~/session";
 
 export const Route = createFileRoute("/docs")({ component: DocsPage });
@@ -398,7 +398,7 @@ const PERM_COLORS: Record<string, string> = {
   test:           "bg-muted text-muted-foreground border-border",
 };
 
-function KeyInfoBanner({ info }: { info: KeyInfo | null | "loading" | "error" }) {
+function KeyInfoBanner({ info }: { info: KeyCheck | null | "loading" }) {
   if (!info) return null;
 
   if (info === "loading") {
@@ -410,11 +410,20 @@ function KeyInfoBanner({ info }: { info: KeyInfo | null | "loading" | "error" })
     );
   }
 
-  if (info === "error") {
+  if (info === "rejected") {
     return (
       <div className="flex items-center gap-2 text-xs text-destructive">
         <AlertCircle size={13} />
         Invalid or expired key
+      </div>
+    );
+  }
+
+  if (info === "unreachable") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-amber-600">
+        <AlertCircle size={13} />
+        Couldn’t reach the API — check it’s running and the URL is right (not the key)
       </div>
     );
   }
@@ -708,7 +717,7 @@ function DocsPage() {
   const [apiKey, setApiKey] = useState<string>(() => {
     try { return localStorage.getItem("docs:apiKey") ?? ""; } catch { return ""; }
   });
-  const [keyInfo, setKeyInfo] = useState<KeyInfo | null | "loading" | "error">(null);
+  const [keyInfo, setKeyInfo] = useState<KeyCheck | null | "loading">(null);
   const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
@@ -719,14 +728,15 @@ function DocsPage() {
     if (!apiKey.trim()) { setKeyInfo(null); return; }
     setKeyInfo("loading");
     const timer = setTimeout(() => {
-      getMyKey(apiKey.trim()).then(info => setKeyInfo(info ?? "error"));
+      getMyKey(apiKey.trim()).then(setKeyInfo);
     }, 500);
     return () => clearTimeout(timer);
   }, [apiKey]);
 
   // A validated key, or null. When present, docs show only what THIS key can do.
   const validKey: KeyInfo | null =
-    keyInfo && keyInfo !== "loading" && keyInfo !== "error" ? keyInfo : null;
+    keyInfo && keyInfo !== "loading" && keyInfo !== "rejected" && keyInfo !== "unreachable"
+      ? keyInfo : null;
 
   // What to show:
   //  - valid key  → only the endpoints that key is allowed to use
